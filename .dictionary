@@ -2,7 +2,7 @@ api
 github
 url
 gh
-drone-s3-sync
+wp-s3-action
 (s|S)3
 cloudfront
 Minio

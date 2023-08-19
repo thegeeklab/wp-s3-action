@@ -1,7 +1,8 @@
 package main
 
 import (
-	"github.com/thegeeklab/drone-s3-sync/plugin"
+	"github.com/thegeeklab/wp-s3-action/plugin"
+
 	"github.com/urfave/cli/v2"
 )
 
@@ -78,46 +79,46 @@ func settingsFlags(settings *plugin.Settings, category string) []cli.Flag {
 			Category:    category,
 		},
 		&cli.GenericFlag{
-			Name:     "acl",
-			Usage:    "access control list",
-			EnvVars:  []string{"PLUGIN_ACL"},
-			Value:    &StringMapFlag{},
-			Category: category,
+			Name:        "acl",
+			Usage:       "access control list",
+			EnvVars:     []string{"PLUGIN_ACL"},
+			Destination: &settings.ACL,
+			Category:    category,
 		},
 		&cli.GenericFlag{
-			Name:     "content-type",
-			Usage:    "content-type settings for uploads",
-			EnvVars:  []string{"PLUGIN_CONTENT_TYPE"},
-			Value:    &StringMapFlag{},
-			Category: category,
+			Name:        "content-type",
+			Usage:       "content-type settings for uploads",
+			EnvVars:     []string{"PLUGIN_CONTENT_TYPE"},
+			Destination: &settings.ContentType,
+			Category:    category,
 		},
 		&cli.GenericFlag{
-			Name:     "content-encoding",
-			Usage:    "content-encoding settings for uploads",
-			EnvVars:  []string{"PLUGIN_CONTENT_ENCODING"},
-			Value:    &StringMapFlag{},
-			Category: category,
+			Name:        "content-encoding",
+			Usage:       "content-encoding settings for uploads",
+			EnvVars:     []string{"PLUGIN_CONTENT_ENCODING"},
+			Destination: &settings.ContentEncoding,
+			Category:    category,
 		},
 		&cli.GenericFlag{
-			Name:     "cache-control",
-			Usage:    "cache-control settings for uploads",
-			EnvVars:  []string{"PLUGIN_CACHE_CONTROL"},
-			Value:    &StringMapFlag{},
-			Category: category,
+			Name:        "cache-control",
+			Usage:       "cache-control settings for uploads",
+			EnvVars:     []string{"PLUGIN_CACHE_CONTROL"},
+			Destination: &settings.CacheControl,
+			Category:    category,
 		},
 		&cli.GenericFlag{
-			Name:     "metadata",
-			Usage:    "additional metadata for uploads",
-			EnvVars:  []string{"PLUGIN_METADATA"},
-			Value:    &DeepStringMapFlag{},
-			Category: category,
+			Name:        "metadata",
+			Usage:       "additional metadata for uploads",
+			EnvVars:     []string{"PLUGIN_METADATA"},
+			Destination: &settings.Metadata,
+			Category:    category,
 		},
 		&cli.GenericFlag{
-			Name:     "redirects",
-			Usage:    "redirects to create",
-			EnvVars:  []string{"PLUGIN_REDIRECTS"},
-			Value:    &MapFlag{},
-			Category: category,
+			Name:        "redirects",
+			Usage:       "redirects to create",
+			EnvVars:     []string{"PLUGIN_REDIRECTS"},
+			Destination: &settings.Redirects,
+			Category:    category,
 		},
 		&cli.StringFlag{
 			Name:        "cloudfront-distribution",

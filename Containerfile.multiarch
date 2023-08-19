@@ -1,0 +1,21 @@
+FROM --platform=$BUILDPLATFORM golang:1.21 as build
+
+ARG TARGETOS
+ARG TARGETARCH
+
+ADD . /src
+WORKDIR /src
+
+RUN make build
+
+FROM alpine:3.18@sha256:7144f7bab3d4c2648d7e59409f15ec52a18006a128c733fcff20d3a4a54ba44a
+
+LABEL maintainer="Robert Kaussow <mail@thegeeklab.de>"
+LABEL org.opencontainers.image.authors="Robert Kaussow <mail@thegeeklab.de>"
+LABEL org.opencontainers.image.title="wp-s3-action"
+LABEL org.opencontainers.image.url="https://github.com/thegeeklab/wp-s3-action"
+LABEL org.opencontainers.image.source="https://github.com/thegeeklab/wp-s3-action"
+LABEL org.opencontainers.image.documentation="https://github.com/thegeeklab/wp-s3-action"
+
+COPY --from=build /src/dist/wp-s3-action /bin/wp-s3-action
+ENTRYPOINT ["/bin/wp-s3-action"]

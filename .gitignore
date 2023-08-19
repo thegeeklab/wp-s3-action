@@ -1,6 +1,6 @@
 /dist/
 /release/
-/drone-s3-sync*
+/wp-s3-action*
 
 coverage.out
 CHANGELOG.md

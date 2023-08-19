@@ -1,8 +1,8 @@
 repository:
-  name: drone-s3-sync
-  description: Drone plugin to synchronize a directory with an S3 bucket
-  homepage: https://drone-plugin-index.geekdocs.de/plugins/drone-s3-sync
-  topics: drone, drone-plugin
+  name: wp-s3-action
+  description: Woodpecker CI plugin to perform S3 actions
+  homepage: https://wp-plugin-index.geekdocs.de/plugins/wp-s3-action
+  topics: woodpecker-ci, woodpecker, woodpecker-plugin
 
   private: false
   has_issues: true
@@ -51,8 +51,11 @@ branches:
       required_status_checks:
         strict: false
         contexts:
-          - continuous-integration/drone/pr
-      enforce_admins: true
+          - ci/woodpecker/pr/test
+          - ci/woodpecker/pr/build-binary
+          - ci/woodpecker/pr/build-container
+          - ci/woodpecker/pr/docs
+      enforce_admins: false
       required_linear_history: true
       restrictions: null
   - name: docs

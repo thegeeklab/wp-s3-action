@@ -1,47 +1,32 @@
 package plugin
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
+	"github.com/urfave/cli/v2"
 )
 
-// Settings for the Plugin.
-type Settings struct {
-	Endpoint               string
-	AccessKey              string
-	SecretKey              string
-	Bucket                 string
-	Region                 string
-	Source                 string
-	Target                 string
-	Delete                 bool
-	ACL                    map[string]string
-	CacheControl           map[string]string
-	ContentType            map[string]string
-	ContentEncoding        map[string]string
-	Metadata               map[string]map[string]string
-	Redirects              map[string]string
-	CloudFrontDistribution string
-	DryRun                 bool
-	PathStyle              bool
-	Client                 AWS
-	Jobs                   []Job
-	MaxConcurrency         int
-}
+var ErrTypeAssertionFailed = errors.New("type assertion failed")
 
-type Job struct {
-	local  string
-	remote string
-	action string
-}
+// Execute provides the implementation of the plugin.
+//
+//nolint:revive
+func (p *Plugin) run(ctx context.Context, cCtx *cli.Context) error {
+	if err := p.Validate(); err != nil {
+		return fmt.Errorf("validation failed: %w", err)
+	}
 
-type Result struct {
-	j   Job
-	err error
+	if err := p.Execute(); err != nil {
+		return fmt.Errorf("execution failed: %w", err)
+	}
+
+	return nil
 }
 
 // Validate handles the settings validation of the plugin.
@@ -51,25 +36,25 @@ func (p *Plugin) Validate() error {
 		return fmt.Errorf("error while retrieving working directory: %w", err)
 	}
 
-	p.settings.Source = filepath.Join(wd, p.settings.Source)
-	p.settings.Target = strings.TrimPrefix(p.settings.Target, "/")
+	p.Settings.Source = filepath.Join(wd, p.Settings.Source)
+	p.Settings.Target = strings.TrimPrefix(p.Settings.Target, "/")
 
 	return nil
 }
 
 // Execute provides the implementation of the plugin.
 func (p *Plugin) Execute() error {
-	p.settings.Jobs = make([]Job, 1)
-	p.settings.Client = NewAWS(p)
+	p.Settings.Jobs = make([]Job, 1)
+	p.Settings.Client = NewAWS(p)
 
 	if err := p.createSyncJobs(); err != nil {
 		return fmt.Errorf("error while creating sync job: %w", err)
 	}
 
-	if len(p.settings.CloudFrontDistribution) > 0 {
-		p.settings.Jobs = append(p.settings.Jobs, Job{
+	if len(p.Settings.CloudFrontDistribution) > 0 {
+		p.Settings.Jobs = append(p.Settings.Jobs, Job{
 			local:  "",
-			remote: filepath.Join("/", p.settings.Target, "*"),
+			remote: filepath.Join("/", p.Settings.Target, "*"),
 			action: "invalidateCloudFront",
 		})
 	}
@@ -82,27 +67,27 @@ func (p *Plugin) Execute() error {
 }
 
 func (p *Plugin) createSyncJobs() error {
-	remote, err := p.settings.Client.List(p.settings.Target)
+	remote, err := p.Settings.Client.List(p.Settings.Target)
 	if err != nil {
 		return err
 	}
 
 	local := make([]string, 0)
 
-	err = filepath.Walk(p.settings.Source, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(p.Settings.Source, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return err
 		}
 
 		localPath := path
-		if p.settings.Source != "." {
-			localPath = strings.TrimPrefix(path, p.settings.Source)
+		if p.Settings.Source != "." {
+			localPath = strings.TrimPrefix(path, p.Settings.Source)
 			localPath = strings.TrimPrefix(localPath, "/")
 		}
 		local = append(local, localPath)
-		p.settings.Jobs = append(p.settings.Jobs, Job{
-			local:  filepath.Join(p.settings.Source, localPath),
-			remote: filepath.Join(p.settings.Target, localPath),
+		p.Settings.Jobs = append(p.Settings.Jobs, Job{
+			local:  filepath.Join(p.Settings.Source, localPath),
+			remote: filepath.Join(p.Settings.Target, localPath),
 			action: "upload",
 		})
 
@@ -112,20 +97,20 @@ func (p *Plugin) createSyncJobs() error {
 		return err
 	}
 
-	for path, location := range p.settings.Redirects {
+	for path, location := range p.Settings.Redirects.Get() {
 		path = strings.TrimPrefix(path, "/")
 		local = append(local, path)
-		p.settings.Jobs = append(p.settings.Jobs, Job{
+		p.Settings.Jobs = append(p.Settings.Jobs, Job{
 			local:  path,
 			remote: location,
 			action: "redirect",
 		})
 	}
 
-	if p.settings.Delete {
+	if p.Settings.Delete {
 		for _, remote := range remote {
 			found := false
-			remotePath := strings.TrimPrefix(remote, p.settings.Target+"/")
+			remotePath := strings.TrimPrefix(remote, p.Settings.Target+"/")
 
 			for _, l := range local {
 				if l == remotePath {
@@ -136,7 +121,7 @@ func (p *Plugin) createSyncJobs() error {
 			}
 
 			if !found {
-				p.settings.Jobs = append(p.settings.Jobs, Job{
+				p.Settings.Jobs = append(p.Settings.Jobs, Job{
 					local:  "",
 					remote: remote,
 					action: "delete",
@@ -149,15 +134,15 @@ func (p *Plugin) createSyncJobs() error {
 }
 
 func (p *Plugin) runJobs() error {
-	client := p.settings.Client
-	jobChan := make(chan struct{}, p.settings.MaxConcurrency)
-	results := make(chan *Result, len(p.settings.Jobs))
+	client := p.Settings.Client
+	jobChan := make(chan struct{}, p.Settings.MaxConcurrency)
+	results := make(chan *Result, len(p.Settings.Jobs))
 
 	var invalidateJob *Job
 
-	logrus.Infof("Synchronizing with bucket '%s'", p.settings.Bucket)
+	log.Info().Msgf("Synchronizing with bucket '%s'", p.Settings.Bucket)
 
-	for _, job := range p.settings.Jobs {
+	for _, job := range p.Settings.Jobs {
 		jobChan <- struct{}{}
 
 		go func(job Job) {
@@ -181,7 +166,7 @@ func (p *Plugin) runJobs() error {
 		}(job)
 	}
 
-	for range p.settings.Jobs {
+	for range p.Settings.Jobs {
 		r := <-results
 		if r.err != nil {
 			return fmt.Errorf("failed to %s %s to %s: %w", r.j.action, r.j.local, r.j.remote, r.err)

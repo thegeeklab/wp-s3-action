@@ -3,7 +3,7 @@ GOFUMPT_PACKAGE_VERSION := v0.5.0
 # renovate: datasource=github-releases depName=golangci/golangci-lint
 GOLANGCI_LINT_PACKAGE_VERSION := v1.54.1
 
-EXECUTABLE := drone-s3-sync
+EXECUTABLE := wp-s3-action
 
 DIST := dist
 DIST_DIRS := $(DIST)
@@ -19,7 +19,7 @@ GOLANGCI_LINT_PACKAGE ?= github.com/golangci/golangci-lint/cmd/golangci-lint@$(G
 XGO_PACKAGE ?= src.techknowlogick.com/xgo@latest
 
 GENERATE ?=
-XGO_VERSION := go-1.20.x
+XGO_VERSION := go-1.21.x
 XGO_TARGETS ?= linux/amd64,linux/arm-6,linux/arm-7,linux/arm64
 
 TARGETOS ?= linux
@@ -30,8 +30,8 @@ endif
 TAGS ?= netgo,osusergo
 
 ifndef VERSION
-	ifneq ($(DRONE_TAG),)
-		VERSION ?= $(subst v,,$(DRONE_TAG))
+	ifneq ($(CI_COMMIT_TAG),)
+		VERSION ?= $(subst v,,$(CI_COMMIT_TAG))
 	else
 		VERSION ?= $(shell git rev-parse --short HEAD)
 	endif

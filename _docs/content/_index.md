@@ -1,15 +1,16 @@
 ---
-title: drone-s3-sync
+title: wp-s3-action
 ---
 
-[![Build Status](https://img.shields.io/drone/build/thegeeklab/drone-s3-sync?logo=drone&server=https%3A%2F%2Fdrone.thegeeklab.de)](https://drone.thegeeklab.de/thegeeklab/drone-s3-sync)
-[![Docker Hub](https://img.shields.io/badge/dockerhub-latest-blue.svg?logo=docker&logoColor=white)](https://hub.docker.com/r/thegeeklab/drone-s3-sync)
-[![Quay.io](https://img.shields.io/badge/quay-latest-blue.svg?logo=docker&logoColor=white)](https://quay.io/repository/thegeeklab/drone-s3-sync)
-[![GitHub contributors](https://img.shields.io/github/contributors/thegeeklab/drone-s3-sync)](https://github.com/thegeeklab/drone-s3-sync/graphs/contributors)
-[![Source: GitHub](https://img.shields.io/badge/source-github-blue.svg?logo=github&logoColor=white)](https://github.com/thegeeklab/drone-s3-sync)
-[![License: MIT](https://img.shields.io/github/license/thegeeklab/drone-s3-sync)](https://github.com/thegeeklab/drone-s3-sync/blob/main/LICENSE)
+[![Build Status](https://ci.thegeeklab.de/api/badges/thegeeklab/wp-s3-action/status.svg)](https://ci.thegeeklab.de/repos/thegeeklab/wp-s3-action)
+[![Docker Hub](https://img.shields.io/badge/dockerhub-latest-blue.svg?logo=docker&logoColor=white)](https://hub.docker.com/r/thegeeklab/wp-s3-action)
+[![Quay.io](https://img.shields.io/badge/quay-latest-blue.svg?logo=docker&logoColor=white)](https://quay.io/repository/thegeeklab/wp-s3-action)
+[![Go Report Card](https://goreportcard.com/badge/github.com/thegeeklab/wp-s3-action)](https://goreportcard.com/report/github.com/thegeeklab/wp-s3-action)
+[![GitHub contributors](https://img.shields.io/github/contributors/thegeeklab/wp-s3-action)](https://github.com/thegeeklab/wp-s3-action/graphs/contributors)
+[![Source: GitHub](https://img.shields.io/badge/source-github-blue.svg?logo=github&logoColor=white)](https://github.com/thegeeklab/wp-s3-action)
+[![License: MIT](https://img.shields.io/github/license/thegeeklab/wp-s3-action)](https://github.com/thegeeklab/wp-s3-action/blob/main/LICENSE)
 
-Drone plugin to synchronize a directory with an S3 bucket.
+Woodpecker CI plugin to perform S3 actions.
 
 <!-- prettier-ignore-start -->
 <!-- spellchecker-disable -->
@@ -25,7 +26,7 @@ name: default
 
 steps:
   - name: sync
-    image: thegeeklab/drone-s3-sync
+    image: thegeeklab/wp-s3-action
     settings:
       access_key: a50d28f4dd477bc184fbd10b376de753
       secret_key: bc5785d3ece6a9cdefa42eb99b58986f9095ff1c
@@ -39,7 +40,7 @@ steps:
 
 <!-- prettier-ignore-start -->
 <!-- spellchecker-disable -->
-{{< propertylist name=drone-s3-sync.data sort=name >}}
+{{< propertylist name=wp-s3-action.data sort=name >}}
 <!-- spellchecker-enable -->
 <!-- prettier-ignore-end -->
 
@@ -53,7 +54,7 @@ name: default
 
 steps:
   - name: sync
-    image: thegeeklab/drone-s3-sync
+    image: thegeeklab/wp-s3-action
     settings:
       access_key: a50d28f4dd477bc184fbd10b376de753
       secret_key: bc5785d3ece6a9cdefa42eb99b58986f9095ff1c
@@ -89,7 +90,7 @@ name: default
 
 steps:
   - name: sync
-    image: thegeeklab/drone-s3-sync
+    image: thegeeklab/wp-s3-action
     settings:
       endpoint: https://minio.example.com
       access_key: a50d28f4dd477bc184fbd10b376de753
@@ -105,18 +106,13 @@ steps:
 Build the binary with the following command:
 
 ```Shell
-export GOOS=linux
-export GOARCH=amd64
-export CGO_ENABLED=0
-export GO111MODULE=on
-
 make build
 ```
 
-Build the Docker image with the following command:
+Build the container image with the following command:
 
 ```Shell
-docker build --file docker/Dockerfile.amd64 --tag thegeeklab/drone-s3-sync .
+docker build --file Containerfile.multiarch --tag thegeeklab/wp-s3-action .
 ```
 
 ## Test
@@ -126,7 +122,7 @@ docker run --rm \
   -e PLUGIN_BUCKET=my_bucket \
   -e AWS_ACCESS_KEY_ID=abc123 \
   -e AWS_SECRET_ACCESS_KEY=xyc789 \
-  -v $(pwd):$(pwd) \
-  -w $(pwd) \
-  thegeeklab/drone-s3-sync
+  -v $(pwd):/build:z \
+  -w /build \
+  thegeeklab/wp-s3-action
 ```
