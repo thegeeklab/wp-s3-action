@@ -2,7 +2,6 @@ package plugin
 
 import (
 	wp "github.com/thegeeklab/wp-plugin-go/plugin"
-	"github.com/thegeeklab/wp-plugin-go/types"
 )
 
 // Plugin implements provide the plugin implementation.
@@ -21,12 +20,12 @@ type Settings struct {
 	Source                 string
 	Target                 string
 	Delete                 bool
-	ACL                    types.StringMapFlag
-	CacheControl           types.StringMapFlag
-	ContentType            types.StringMapFlag
-	ContentEncoding        types.StringMapFlag
-	Metadata               types.DeepStringMapFlag
-	Redirects              types.StringMapFlag
+	ACL                    map[string]string
+	CacheControl           map[string]string
+	ContentType            map[string]string
+	ContentEncoding        map[string]string
+	Metadata               map[string]map[string]string
+	Redirects              map[string]string
 	CloudFrontDistribution string
 	DryRun                 bool
 	PathStyle              bool

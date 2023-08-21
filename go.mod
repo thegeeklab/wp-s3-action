@@ -6,7 +6,7 @@ require (
 	github.com/aws/aws-sdk-go v1.44.327
 	github.com/rs/zerolog v1.30.0
 	github.com/ryanuber/go-glob v1.0.0
-	github.com/thegeeklab/wp-plugin-go v0.4.0
+	github.com/thegeeklab/wp-plugin-go v0.5.0
 	github.com/urfave/cli/v2 v2.25.7
 )
 

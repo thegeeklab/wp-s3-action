@@ -73,9 +73,9 @@ func (a *AWS) Upload(local, remote string) error {
 
 	var acl string
 
-	for pattern := range plugin.Settings.ACL.Get() {
+	for pattern := range plugin.Settings.ACL {
 		if match := glob.Glob(pattern, local); match {
-			acl = plugin.Settings.ACL.Get()[pattern]
+			acl = plugin.Settings.ACL[pattern]
 
 			break
 		}
@@ -89,9 +89,9 @@ func (a *AWS) Upload(local, remote string) error {
 
 	var contentType string
 
-	for patternExt := range plugin.Settings.ContentType.Get() {
+	for patternExt := range plugin.Settings.ContentType {
 		if patternExt == fileExt {
-			contentType = plugin.Settings.ContentType.Get()[patternExt]
+			contentType = plugin.Settings.ContentType[patternExt]
 
 			break
 		}
@@ -103,9 +103,9 @@ func (a *AWS) Upload(local, remote string) error {
 
 	var contentEncoding string
 
-	for patternExt := range plugin.Settings.ContentEncoding.Get() {
+	for patternExt := range plugin.Settings.ContentEncoding {
 		if patternExt == fileExt {
-			contentEncoding = plugin.Settings.ContentEncoding.Get()[patternExt]
+			contentEncoding = plugin.Settings.ContentEncoding[patternExt]
 
 			break
 		}
@@ -113,9 +113,9 @@ func (a *AWS) Upload(local, remote string) error {
 
 	var cacheControl string
 
-	for pattern := range plugin.Settings.CacheControl.Get() {
+	for pattern := range plugin.Settings.CacheControl {
 		if match := glob.Glob(pattern, local); match {
-			cacheControl = plugin.Settings.CacheControl.Get()[pattern]
+			cacheControl = plugin.Settings.CacheControl[pattern]
 
 			break
 		}
@@ -123,9 +123,9 @@ func (a *AWS) Upload(local, remote string) error {
 
 	metadata := map[string]*string{}
 
-	for pattern := range plugin.Settings.Metadata.Get() {
+	for pattern := range plugin.Settings.Metadata {
 		if match := glob.Glob(pattern, local); match {
-			for k, v := range plugin.Settings.Metadata.Get()[pattern] {
+			for k, v := range plugin.Settings.Metadata[pattern] {
 				metadata[k] = aws.String(v)
 			}
 

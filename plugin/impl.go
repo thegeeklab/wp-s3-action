@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog/log"
-	"github.com/urfave/cli/v2"
 )
 
 var ErrTypeAssertionFailed = errors.New("type assertion failed")
@@ -17,7 +16,7 @@ var ErrTypeAssertionFailed = errors.New("type assertion failed")
 // Execute provides the implementation of the plugin.
 //
 //nolint:revive
-func (p *Plugin) run(ctx context.Context, cCtx *cli.Context) error {
+func (p *Plugin) run(ctx context.Context) error {
 	if err := p.Validate(); err != nil {
 		return fmt.Errorf("validation failed: %w", err)
 	}
@@ -97,7 +96,7 @@ func (p *Plugin) createSyncJobs() error {
 		return err
 	}
 
-	for path, location := range p.Settings.Redirects.Get() {
+	for path, location := range p.Settings.Redirects {
 		path = strings.TrimPrefix(path, "/")
 		local = append(local, path)
 		p.Settings.Jobs = append(p.Settings.Jobs, Job{
