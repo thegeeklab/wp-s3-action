@@ -1,0 +1,94 @@
+---
+properties:
+  - name: endpoint
+    description: Endpoint for the s3 connection.
+    type: string
+    required: false
+
+  - name: access-key
+    description: S3 access key.
+    type: string
+    required: false
+
+  - name: secret-key
+    description: S3 secret key.
+    type: string
+    required: false
+
+  - name: path-style
+    description: Enable path style for bucket paths.
+    type: bool
+    required: false
+
+  - name: bucket
+    description: Name of the bucket.
+    type: string
+    required: true
+
+  - name: region
+    description: S3 region.
+    defaultValue: us-east-1
+    type: string
+    required: false
+
+  - name: source
+    description: Upload source path.
+    defaultValue: .
+    type: string
+    required: false
+
+  - name: target
+    description: Upload target path.
+    defaultValue: /
+    type: string
+    required: false
+
+  - name: delete
+    description: Delete locally removed files from the target.
+    type: bool
+    required: false
+
+  - name: acl
+    description: Access control list.
+    type: map
+    required: false
+
+  - name: content-type
+    description: Content-type settings for uploads.
+    type: map
+    required: false
+
+  - name: content-encoding
+    description: Content-encoding settings for uploads.
+    type: map
+    required: false
+
+  - name: cache_control
+    description: Cache-control settings for uploads.
+    type: map
+    required: false
+
+  - name: metadata
+    description: Additional metadata for uploads.
+    type: map
+    required: false
+
+  - name: redirects
+    description: Redirects to create.
+    type: map
+    required: false
+
+  - name: cloudfront-distribution
+    description: ID of cloudfront distribution to invalidate.
+    type: string
+    required: false
+
+  - name: dry_run
+    description: Dry run disables API calls.
+    type: bool
+    required: false
+
+  - name: max_concurrency
+    description: Customize number of concurrent files to process.
+    defaultValue: 100
+    type: int
