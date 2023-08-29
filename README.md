@@ -10,7 +10,7 @@ Woodpecker CI plugin to perform S3 actions
 [![Source: GitHub](https://img.shields.io/badge/source-github-blue.svg?logo=github&logoColor=white)](https://github.com/thegeeklab/wp-s3-action)
 [![License: MIT](https://img.shields.io/github/license/thegeeklab/wp-s3-action)](https://github.com/thegeeklab/wp-s3-action/blob/main/LICENSE)
 
-Woodpecker CI plugin to perform S3 actions. You can find the full documentation at [https://wp-plugin-index.geekdocs.de](https://wp-plugin-index.geekdocs.de/plugins/wp-s3-action).
+Woodpecker CI plugin to perform S3 actions. You can find the full documentation at [https://woodpecker-plugins.geekdocs.de](https://woodpecker-plugins.geekdocs.de/plugins/wp-s3-action).
 
 ## Contributors
 
