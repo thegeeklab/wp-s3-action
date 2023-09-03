@@ -3,7 +3,7 @@ module github.com/thegeeklab/wp-s3-action
 go 1.21
 
 require (
-	github.com/aws/aws-sdk-go v1.44.328
+	github.com/aws/aws-sdk-go v1.45.2
 	github.com/rs/zerolog v1.30.0
 	github.com/ryanuber/go-glob v1.0.0
 	github.com/thegeeklab/wp-plugin-go v1.0.1
