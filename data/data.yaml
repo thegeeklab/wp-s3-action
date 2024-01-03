@@ -46,7 +46,7 @@ properties:
     description: |
       Delete locally removed files from the target.
     type: bool
-    defaultvalue: false
+    defaultValue: false
     required: false
 
   - name: endpoint
@@ -59,7 +59,7 @@ properties:
     description: |
       Customize number concurrent files to process.
     type: integer
-    defaultvalue: 100
+    defaultValue: 100
     required: false
 
   - name: metadata
@@ -72,7 +72,7 @@ properties:
     description: |
       Enable path style for bucket paths.
     type: bool
-    defaultvalue: false
+    defaultValue: false
     required: false
 
   - name: redirects
@@ -85,7 +85,7 @@ properties:
     description: |
       S3 region.
     type: string
-    defaultvalue: "us-east-1"
+    defaultValue: "us-east-1"
     required: false
 
   - name: secret_key
@@ -98,12 +98,12 @@ properties:
     description: |
       Upload source path.
     type: string
-    defaultvalue: "."
+    defaultValue: "."
     required: false
 
   - name: target
     description: |
       Upload target path.
     type: string
-    defaultvalue: "/"
+    defaultValue: "/"
     required: false
