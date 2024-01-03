@@ -26,7 +26,7 @@ name: default
 
 steps:
   - name: sync
-    image: thegeeklab/wp-s3-action
+    image: quay.io/thegeeklab/wp-s3-action
     settings:
       access_key: a50d28f4dd477bc184fbd10b376de753
       secret_key: bc5785d3ece6a9cdefa42eb99b58986f9095ff1c
@@ -54,7 +54,7 @@ name: default
 
 steps:
   - name: sync
-    image: thegeeklab/wp-s3-action
+    image: quay.io/thegeeklab/wp-s3-action
     settings:
       access_key: a50d28f4dd477bc184fbd10b376de753
       secret_key: bc5785d3ece6a9cdefa42eb99b58986f9095ff1c
@@ -90,7 +90,7 @@ name: default
 
 steps:
   - name: sync
-    image: thegeeklab/wp-s3-action
+    image: quay.io/thegeeklab/wp-s3-action
     settings:
       endpoint: https://minio.example.com
       access_key: a50d28f4dd477bc184fbd10b376de753

@@ -1,94 +1,109 @@
 ---
 properties:
-  - name: endpoint
-    description: Endpoint for the s3 connection.
-    type: string
-    required: false
-
-  - name: access-key
-    description: S3 access key.
-    type: string
-    required: false
-
-  - name: secret-key
-    description: S3 secret key.
-    type: string
-    required: false
-
-  - name: path-style
-    description: Enable path style for bucket paths.
-    type: bool
-    required: false
-
-  - name: bucket
-    description: Name of the bucket.
+  - name: access_key
+    description: |
+      S3 access key.
     type: string
     required: true
 
-  - name: region
-    description: S3 region.
-    defaultValue: us-east-1
+  - name: acl
+    description: |
+      Access control list.
+    type: generic
+    required: false
+
+  - name: bucket
+    description: |
+      Name of the bucket.
+    type: string
+    required: true
+
+  - name: cache_control
+    description: |
+      Cache-control settings for uploads.
+    type: generic
+    required: false
+
+  - name: cloudfront_distribution
+    description: |
+      ID of cloudfront distribution to invalidate.
     type: string
     required: false
 
-  - name: source
-    description: Upload source path.
-    defaultValue: .
-    type: string
+  - name: content_encoding
+    description: |
+      Content-encoding settings for uploads.
+    type: generic
     required: false
 
-  - name: target
-    description: Upload target path.
-    defaultValue: /
-    type: string
+  - name: content_type
+    description: |
+      Content-type settings for uploads.
+    type: generic
     required: false
 
   - name: delete
-    description: Delete locally removed files from the target.
+    description: |
+      Delete locally removed files from the target.
     type: bool
+    defaultvalue: false
     required: false
 
-  - name: acl
-    description: Access control list.
-    type: map
-    required: false
-
-  - name: content-type
-    description: Content-type settings for uploads.
-    type: map
-    required: false
-
-  - name: content-encoding
-    description: Content-encoding settings for uploads.
-    type: map
-    required: false
-
-  - name: cache_control
-    description: Cache-control settings for uploads.
-    type: map
-    required: false
-
-  - name: metadata
-    description: Additional metadata for uploads.
-    type: map
-    required: false
-
-  - name: redirects
-    description: Redirects to create.
-    type: map
-    required: false
-
-  - name: cloudfront-distribution
-    description: ID of cloudfront distribution to invalidate.
+  - name: endpoint
+    description: |
+      Endpoint for the s3 connection.
     type: string
     required: false
 
-  - name: dry_run
-    description: Dry run disables API calls.
-    type: bool
+  - name: max_concurrency
+    description: |
+      Customize number concurrent files to process.
+    type: integer
+    defaultvalue: 100
     required: false
 
-  - name: max_concurrency
-    description: Customize number of concurrent files to process.
-    defaultValue: 100
-    type: int
+  - name: metadata
+    description: |
+      Additional metadata for uploads.
+    type: generic
+    required: false
+
+  - name: path_style
+    description: |
+      Enable path style for bucket paths.
+    type: bool
+    defaultvalue: false
+    required: false
+
+  - name: redirects
+    description: |
+      Redirects to create.
+    type: generic
+    required: false
+
+  - name: region
+    description: |
+      S3 region.
+    type: string
+    defaultvalue: "us-east-1"
+    required: false
+
+  - name: secret_key
+    description: |
+      S3 secret key.
+    type: string
+    required: true
+
+  - name: source
+    description: |
+      Upload source path.
+    type: string
+    defaultvalue: "."
+    required: false
+
+  - name: target
+    description: |
+      Upload target path.
+    type: string
+    defaultvalue: "/"
+    required: false
