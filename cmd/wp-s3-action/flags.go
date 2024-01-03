@@ -8,6 +8,8 @@ import (
 )
 
 // settingsFlags has the cli.Flags for the plugin.Settings.
+//
+//go:generate go run docs.go flags.go
 func settingsFlags(settings *plugin.Settings, category string) []cli.Flag {
 	return []cli.Flag{
 		&cli.StringFlag{
@@ -123,7 +125,7 @@ func settingsFlags(settings *plugin.Settings, category string) []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name:        "cloudfront-distribution",
-			Usage:       "id of cloudfront distribution to invalidate",
+			Usage:       "ID of cloudfront distribution to invalidate",
 			EnvVars:     []string{"PLUGIN_CLOUDFRONT_DISTRIBUTION"},
 			Destination: &settings.CloudFrontDistribution,
 			Category:    category,
