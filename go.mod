@@ -1,6 +1,6 @@
 module github.com/thegeeklab/wp-s3-action
 
-go 1.21
+go 1.22
 
 require (
 	github.com/aws/aws-sdk-go v1.50.7
