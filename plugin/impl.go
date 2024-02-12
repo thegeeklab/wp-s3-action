@@ -83,7 +83,9 @@ func (p *Plugin) createSyncJobs() error {
 			localPath = strings.TrimPrefix(path, p.Settings.Source)
 			localPath = strings.TrimPrefix(localPath, "/")
 		}
+
 		local = append(local, localPath)
+
 		p.Settings.Jobs = append(p.Settings.Jobs, Job{
 			local:  filepath.Join(p.Settings.Source, localPath),
 			remote: filepath.Join(p.Settings.Target, localPath),
