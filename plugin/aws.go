@@ -410,7 +410,6 @@ func (a *AWS) List(path string) ([]string, error) {
 			Prefix: aws.String(path),
 			Marker: aws.String(remote[len(remote)-1]),
 		})
-
 		if err != nil {
 			return remote, err
 		}
