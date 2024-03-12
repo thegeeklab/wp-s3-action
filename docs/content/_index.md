@@ -21,15 +21,12 @@ Woodpecker CI plugin to perform S3 actions.
 ## Usage
 
 ```YAML
-kind: pipeline
-name: default
-
 steps:
   - name: sync
     image: quay.io/thegeeklab/wp-s3-action
     settings:
-      access_key: a50d28f4dd477bc184fbd10b376de753
-      secret_key: bc5785d3ece6a9cdefa42eb99b58986f9095ff1c
+      access_key: randomstring
+      secret_key: random-secret
       region: us-east-1
       bucket: my-bucket.s3-website-us-east-1.amazonaws.com
       source: folder/to/archive
@@ -49,15 +46,12 @@ steps:
 **Customize `acl`, `content_type`, `content_encoding` or `cache_control`:**
 
 ```YAML
-kind: pipeline
-name: default
-
 steps:
   - name: sync
     image: quay.io/thegeeklab/wp-s3-action
     settings:
-      access_key: a50d28f4dd477bc184fbd10b376de753
-      secret_key: bc5785d3ece6a9cdefa42eb99b58986f9095ff1c
+      access_key: randomstring
+      secret_key: random-secret
       region: us-east-1
       bucket: my-bucket.s3-website-us-east-1.amazonaws.com
       source: folder/to/archive
@@ -85,16 +79,13 @@ All `map` parameters can be specified as `map` for a subset of files or as `stri
 To use [Minio S3](https://docs.min.io/) its required to set `path_style: true`.
 
 ```YAML
-kind: pipeline
-name: default
-
 steps:
   - name: sync
     image: quay.io/thegeeklab/wp-s3-action
     settings:
       endpoint: https://minio.example.com
-      access_key: a50d28f4dd477bc184fbd10b376de753
-      secret_key: bc5785d3ece6a9cdefa42eb99b58986f9095ff1c
+      access_key: randomstring
+      secret_key: random-secret
       bucket: my-bucket
       source: folder/to/archive
       target: /target/location
@@ -120,8 +111,8 @@ docker build --file Containerfile.multiarch --tag thegeeklab/wp-s3-action .
 ```Shell
 docker run --rm \
   -e PLUGIN_BUCKET=my_bucket \
-  -e AWS_ACCESS_KEY_ID=abc123 \
-  -e AWS_SECRET_ACCESS_KEY=xyc789 \
+  -e AWS_ACCESS_KEY_ID=randomstring \
+  -e AWS_SECRET_ACCESS_KEY=random-secret \
   -v $(pwd):/build:z \
   -w /build \
   thegeeklab/wp-s3-action
