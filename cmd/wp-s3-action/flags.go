@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/thegeeklab/wp-plugin-go/types"
+	"github.com/thegeeklab/wp-plugin-go/v2/types"
 	"github.com/thegeeklab/wp-s3-action/plugin"
 
 	"github.com/urfave/cli/v2"
