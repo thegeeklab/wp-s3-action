@@ -1,59 +1,60 @@
 package plugin
 
 import (
-	//nolint:gosec
-	"crypto/md5"
+	"context"
+	"crypto/md5" //nolint:gosec
 	"errors"
 	"fmt"
 	"io"
 	"mime"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/cloudfront"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/cloudfront"
+	cf_types "github.com/aws/aws-sdk-go-v2/service/cloudfront/types"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	s3_types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/rs/zerolog/log"
 	"github.com/ryanuber/go-glob"
 )
 
 type AWS struct {
-	client   *s3.S3
-	cfClient *cloudfront.CloudFront
+	client   *s3.Client
+	cfClient *cloudfront.Client
 	remote   []string
 	local    []string
 	plugin   *Plugin
 }
 
-func NewAWS(plugin *Plugin) AWS {
-	sessCfg := &aws.Config{
-		S3ForcePathStyle: aws.Bool(plugin.Settings.PathStyle),
-		Region:           aws.String(plugin.Settings.Region),
+func NewAWS(plugin *Plugin) (AWS, error) {
+	cfg, err := config.LoadDefaultConfig(context.TODO(),
+		config.WithRegion(plugin.Settings.Region),
+	)
+	if err != nil {
+		return AWS{}, fmt.Errorf("error while loading AWS config: %w", err)
 	}
 
 	if plugin.Settings.Endpoint != "" {
-		sessCfg.Endpoint = &plugin.Settings.Endpoint
-		sessCfg.DisableSSL = aws.Bool(strings.HasPrefix(plugin.Settings.Endpoint, "http://"))
+		cfg.BaseEndpoint = aws.String(plugin.Settings.Endpoint)
 	}
 
 	// allowing to use the instance role or provide a key and secret
 	if plugin.Settings.AccessKey != "" && plugin.Settings.SecretKey != "" {
-		sessCfg.Credentials = credentials.NewStaticCredentials(plugin.Settings.AccessKey, plugin.Settings.SecretKey, "")
+		cfg.Credentials = credentials.NewStaticCredentialsProvider(plugin.Settings.AccessKey, plugin.Settings.SecretKey, "")
 	}
 
-	sess, _ := session.NewSession(sessCfg)
-
-	c := s3.New(sess)
-	cf := cloudfront.New(sess)
+	c := s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.UsePathStyle = plugin.Settings.PathStyle
+	})
+	cf := cloudfront.NewFromConfig(cfg)
 	r := make([]string, 1)
 	l := make([]string, 1)
 
-	return AWS{c, cf, r, l, plugin}
+	return AWS{c, cf, r, l, plugin}, nil
 }
 
 //nolint:gocognit,gocyclo,maintidx
@@ -121,27 +122,26 @@ func (a *AWS) Upload(local, remote string) error {
 		}
 	}
 
-	metadata := map[string]*string{}
+	metadata := map[string]string{}
 
 	for pattern := range plugin.Settings.Metadata {
 		if match := glob.Glob(pattern, local); match {
 			for k, v := range plugin.Settings.Metadata[pattern] {
-				metadata[k] = aws.String(v)
+				metadata[k] = v
 			}
 
 			break
 		}
 	}
 
-	var AWSErr awserr.Error
+	var noSuchKeyErr *s3_types.NoSuchKey
 
-	head, err := a.client.HeadObject(&s3.HeadObjectInput{
+	head, err := a.client.HeadObject(context.TODO(), &s3.HeadObjectInput{
 		Bucket: aws.String(plugin.Settings.Bucket),
 		Key:    aws.String(remote),
 	})
-	if err != nil && errors.As(err, &AWSErr) {
-		//nolint:errorlint,forcetypeassert
-		if err.(awserr.Error).Code() == "404" {
+	if err != nil {
+		if errors.As(err, &noSuchKeyErr) {
 			return err
 		}
 
@@ -157,7 +157,7 @@ func (a *AWS) Upload(local, remote string) error {
 			Key:         aws.String(remote),
 			Body:        file,
 			ContentType: aws.String(contentType),
-			ACL:         aws.String(acl),
+			ACL:         s3_types.ObjectCannedACL(acl),
 			Metadata:    metadata,
 		}
 
@@ -174,7 +174,7 @@ func (a *AWS) Upload(local, remote string) error {
 			return nil
 		}
 
-		_, err = a.client.PutObject(putObject)
+		_, err = a.client.PutObject(context.TODO(), putObject)
 
 		return err
 	}
@@ -233,7 +233,7 @@ func (a *AWS) Upload(local, remote string) error {
 		if !shouldCopy && len(metadata) > 0 {
 			for k, v := range metadata {
 				if hv, ok := head.Metadata[k]; ok {
-					if *v != *hv {
+					if v != hv {
 						log.Debug().Msgf("metadata values have changed for %s", local)
 
 						shouldCopy = true
@@ -245,7 +245,7 @@ func (a *AWS) Upload(local, remote string) error {
 		}
 
 		if !shouldCopy {
-			grant, err := a.client.GetObjectAcl(&s3.GetObjectAclInput{
+			grant, err := a.client.GetObjectAcl(context.TODO(), &s3.GetObjectAclInput{
 				Bucket: aws.String(plugin.Settings.Bucket),
 				Key:    aws.String(remote),
 			})
@@ -259,15 +259,15 @@ func (a *AWS) Upload(local, remote string) error {
 				grantee := *grant.Grantee
 				if grantee.URI != nil {
 					if *grantee.URI == "http://acs.amazonaws.com/groups/global/AllUsers" {
-						if *grant.Permission == "READ" {
+						if grant.Permission == "READ" {
 							previousACL = "public-read"
-						} else if *grant.Permission == "WRITE" {
+						} else if grant.Permission == "WRITE" {
 							previousACL = "public-read-write"
 						}
 					}
 
 					if *grantee.URI == "http://acs.amazonaws.com/groups/global/AuthenticatedUsers" {
-						if *grant.Permission == "READ" {
+						if grant.Permission == "READ" {
 							previousACL = "authenticated-read"
 						}
 					}
@@ -293,10 +293,10 @@ func (a *AWS) Upload(local, remote string) error {
 			Bucket:            aws.String(plugin.Settings.Bucket),
 			Key:               aws.String(remote),
 			CopySource:        aws.String(fmt.Sprintf("%s/%s", plugin.Settings.Bucket, remote)),
-			ACL:               aws.String(acl),
+			ACL:               s3_types.ObjectCannedACL(acl),
 			ContentType:       aws.String(contentType),
 			Metadata:          metadata,
-			MetadataDirective: aws.String("REPLACE"),
+			MetadataDirective: s3_types.MetadataDirectiveReplace,
 		}
 
 		if len(cacheControl) > 0 {
@@ -312,7 +312,7 @@ func (a *AWS) Upload(local, remote string) error {
 			return nil
 		}
 
-		_, err = a.client.CopyObject(copyObject)
+		_, err = a.client.CopyObject(context.Background(), copyObject)
 
 		return err
 	}
@@ -329,7 +329,7 @@ func (a *AWS) Upload(local, remote string) error {
 		Key:         aws.String(remote),
 		Body:        file,
 		ContentType: aws.String(contentType),
-		ACL:         aws.String(acl),
+		ACL:         s3_types.ObjectCannedACL(acl),
 		Metadata:    metadata,
 	}
 
@@ -346,7 +346,7 @@ func (a *AWS) Upload(local, remote string) error {
 		return nil
 	}
 
-	_, err = a.client.PutObject(putObject)
+	_, err = a.client.PutObject(context.TODO(), putObject)
 
 	return err
 }
@@ -360,10 +360,10 @@ func (a *AWS) Redirect(path, location string) error {
 		return nil
 	}
 
-	_, err := a.client.PutObject(&s3.PutObjectInput{
+	_, err := a.client.PutObject(context.TODO(), &s3.PutObjectInput{
 		Bucket:                  aws.String(plugin.Settings.Bucket),
 		Key:                     aws.String(path),
-		ACL:                     aws.String("public-read"),
+		ACL:                     s3_types.ObjectCannedACLPublicRead,
 		WebsiteRedirectLocation: aws.String(location),
 	})
 
@@ -379,7 +379,7 @@ func (a *AWS) Delete(remote string) error {
 		return nil
 	}
 
-	_, err := a.client.DeleteObject(&s3.DeleteObjectInput{
+	_, err := a.client.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
 		Bucket: aws.String(plugin.Settings.Bucket),
 		Key:    aws.String(remote),
 	})
@@ -392,7 +392,7 @@ func (a *AWS) List(path string) ([]string, error) {
 
 	remote := make([]string, 0)
 
-	resp, err := a.client.ListObjects(&s3.ListObjectsInput{
+	resp, err := a.client.ListObjects(context.TODO(), &s3.ListObjectsInput{
 		Bucket: aws.String(plugin.Settings.Bucket),
 		Prefix: aws.String(path),
 	})
@@ -405,7 +405,7 @@ func (a *AWS) List(path string) ([]string, error) {
 	}
 
 	for *resp.IsTruncated {
-		resp, err = a.client.ListObjects(&s3.ListObjectsInput{
+		resp, err = a.client.ListObjects(context.TODO(), &s3.ListObjectsInput{
 			Bucket: aws.String(plugin.Settings.Bucket),
 			Prefix: aws.String(path),
 			Marker: aws.String(remote[len(remote)-1]),
@@ -427,14 +427,14 @@ func (a *AWS) Invalidate(invalidatePath string) error {
 
 	log.Debug().Msgf("invalidating '%s'", invalidatePath)
 
-	_, err := a.cfClient.CreateInvalidation(&cloudfront.CreateInvalidationInput{
+	_, err := a.cfClient.CreateInvalidation(context.TODO(), &cloudfront.CreateInvalidationInput{
 		DistributionId: aws.String(p.Settings.CloudFrontDistribution),
-		InvalidationBatch: &cloudfront.InvalidationBatch{
+		InvalidationBatch: &cf_types.InvalidationBatch{
 			CallerReference: aws.String(time.Now().Format(time.RFC3339Nano)),
-			Paths: &cloudfront.Paths{
-				Quantity: aws.Int64(1),
-				Items: []*string{
-					aws.String(invalidatePath),
+			Paths: &cf_types.Paths{
+				Quantity: aws.Int32(1),
+				Items: []string{
+					invalidatePath,
 				},
 			},
 		},

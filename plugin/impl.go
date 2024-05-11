@@ -44,7 +44,7 @@ func (p *Plugin) Validate() error {
 // Execute provides the implementation of the plugin.
 func (p *Plugin) Execute() error {
 	p.Settings.Jobs = make([]Job, 1)
-	p.Settings.Client = NewAWS(p)
+	p.Settings.Client, _ = NewAWS(p)
 
 	if err := p.createSyncJobs(); err != nil {
 		return fmt.Errorf("error while creating sync job: %w", err)
