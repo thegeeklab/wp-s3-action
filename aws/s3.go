@@ -9,31 +9,12 @@ import (
 	"mime"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
-	"github.com/aws/aws-sdk-go-v2/service/cloudfront"
-	cf_types "github.com/aws/aws-sdk-go-v2/service/cloudfront/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	s3_types "github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/rs/zerolog/log"
 )
-
-type Client struct {
-	S3         *S3
-	Cloudfront *Cloudfront
-}
-
-type Cloudfront struct {
-	client       CloudfrontAPIClient
-	Distribution string
-}
-
-type CloudfrontInvalidateOpt struct {
-	Path string
-}
 
 type S3 struct {
 	client S3APIClient
@@ -64,33 +45,6 @@ type S3ListOptions struct {
 	Path string
 }
 
-// NewClient creates a new S3 client with the provided configuration.
-func NewClient(ctx context.Context, url, region, accessKey, secretKey string, pathStyle bool) (*Client, error) {
-	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(region))
-	if err != nil {
-		return nil, fmt.Errorf("error while loading AWS config: %w", err)
-	}
-
-	if url != "" {
-		cfg.BaseEndpoint = aws.String(url)
-	}
-
-	// allowing to use the instance role or provide a key and secret
-	if accessKey != "" && secretKey != "" {
-		cfg.Credentials = credentials.NewStaticCredentialsProvider(accessKey, secretKey, "")
-	}
-
-	c := s3.NewFromConfig(cfg, func(o *s3.Options) {
-		o.UsePathStyle = pathStyle
-	})
-	cf := cloudfront.NewFromConfig(cfg)
-
-	return &Client{
-		S3:         &S3{client: c},
-		Cloudfront: &Cloudfront{client: cf},
-	}, nil
-}
-
 // Upload uploads a file to an S3 bucket. It first checks if the file already exists in the bucket
 // and compares the local file's content and metadata with the remote file. If the file has changed,
 // it updates the remote file's metadata. If the file does not exist or has changed,
@@ -117,7 +71,7 @@ func (u *S3) Upload(ctx context.Context, opt S3UploadOptions) error {
 		Key:    &opt.RemoteObjectKey,
 	})
 	if err != nil {
-		var noSuchKeyError *s3_types.NoSuchKey
+		var noSuchKeyError *types.NoSuchKey
 		if !errors.As(err, &noSuchKeyError) {
 			return err
 		}
@@ -138,7 +92,7 @@ func (u *S3) Upload(ctx context.Context, opt S3UploadOptions) error {
 			Key:             &opt.RemoteObjectKey,
 			Body:            file,
 			ContentType:     &contentType,
-			ACL:             s3_types.ObjectCannedACL(acl),
+			ACL:             types.ObjectCannedACL(acl),
 			Metadata:        metadata,
 			CacheControl:    &cacheControl,
 			ContentEncoding: &contentEncoding,
@@ -172,10 +126,10 @@ func (u *S3) Upload(ctx context.Context, opt S3UploadOptions) error {
 			Bucket:            &u.Bucket,
 			Key:               &opt.RemoteObjectKey,
 			CopySource:        aws.String(fmt.Sprintf("%s/%s", u.Bucket, opt.RemoteObjectKey)),
-			ACL:               s3_types.ObjectCannedACL(acl),
+			ACL:               types.ObjectCannedACL(acl),
 			ContentType:       &contentType,
 			Metadata:          metadata,
-			MetadataDirective: s3_types.MetadataDirectiveReplace,
+			MetadataDirective: types.MetadataDirectiveReplace,
 			CacheControl:      &cacheControl,
 			ContentEncoding:   &contentEncoding,
 		})
@@ -199,7 +153,7 @@ func (u *S3) Upload(ctx context.Context, opt S3UploadOptions) error {
 		Key:             &opt.RemoteObjectKey,
 		Body:            file,
 		ContentType:     &contentType,
-		ACL:             s3_types.ObjectCannedACL(acl),
+		ACL:             types.ObjectCannedACL(acl),
 		Metadata:        metadata,
 		CacheControl:    &cacheControl,
 		ContentEncoding: &contentEncoding,
@@ -371,6 +325,7 @@ func getMetadata(file string, patterns map[string]map[string]string) map[string]
 	return metadata
 }
 
+// Redirect adds a redirect from the specified path to the specified location in the S3 bucket.
 func (u *S3) Redirect(ctx context.Context, opt S3RedirectOptions) error {
 	log.Debug().Msgf("adding redirect from '%s' to '%s'", opt.Path, opt.Location)
 
@@ -381,13 +336,14 @@ func (u *S3) Redirect(ctx context.Context, opt S3RedirectOptions) error {
 	_, err := u.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:                  aws.String(u.Bucket),
 		Key:                     aws.String(opt.Path),
-		ACL:                     s3_types.ObjectCannedACLPublicRead,
+		ACL:                     types.ObjectCannedACLPublicRead,
 		WebsiteRedirectLocation: aws.String(opt.Location),
 	})
 
 	return err
 }
 
+// Delete removes the specified object from the S3 bucket.
 func (u *S3) Delete(ctx context.Context, opt S3DeleteOptions) error {
 	log.Debug().Msgf("removing remote file '%s'", opt.RemoteObjectKey)
 
@@ -403,6 +359,7 @@ func (u *S3) Delete(ctx context.Context, opt S3DeleteOptions) error {
 	return err
 }
 
+// List retrieves a list of object keys in the S3 bucket under the specified path.
 func (u *S3) List(ctx context.Context, opt S3ListOptions) ([]string, error) {
 	remote := make([]string, 0)
 
@@ -434,23 +391,4 @@ func (u *S3) List(ctx context.Context, opt S3ListOptions) ([]string, error) {
 	}
 
 	return remote, nil
-}
-
-func (c *Cloudfront) Invalidate(ctx context.Context, opt CloudfrontInvalidateOpt) error {
-	log.Debug().Msgf("invalidating '%s'", opt.Path)
-
-	_, err := c.client.CreateInvalidation(ctx, &cloudfront.CreateInvalidationInput{
-		DistributionId: aws.String(c.Distribution),
-		InvalidationBatch: &cf_types.InvalidationBatch{
-			CallerReference: aws.String(time.Now().Format(time.RFC3339Nano)),
-			Paths: &cf_types.Paths{
-				Quantity: aws.Int32(1),
-				Items: []string{
-					opt.Path,
-				},
-			},
-		},
-	})
-
-	return err
 }
