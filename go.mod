@@ -6,7 +6,7 @@ require (
 	github.com/aws/aws-sdk-go v1.51.25
 	github.com/rs/zerolog v1.32.0
 	github.com/ryanuber/go-glob v1.0.0
-	github.com/thegeeklab/wp-plugin-go v1.7.1
+	github.com/thegeeklab/wp-plugin-go/v2 v2.3.1
 	github.com/urfave/cli/v2 v2.27.2
 )
 
@@ -28,7 +28,7 @@ require (
 	github.com/shopspring/decimal v1.2.0 // indirect
 	github.com/spf13/cast v1.3.1 // indirect
 	github.com/xrash/smetrics v0.0.0-20240312152122-5f08fbb34913 // indirect
-	golang.org/x/crypto v0.22.0 // indirect
-	golang.org/x/net v0.24.0 // indirect
-	golang.org/x/sys v0.19.0 // indirect
+	golang.org/x/crypto v0.23.0 // indirect
+	golang.org/x/net v0.25.0 // indirect
+	golang.org/x/sys v0.20.0 // indirect
 )
