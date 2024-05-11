@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog/log"
+	"github.com/thegeeklab/wp-s3-action/aws"
 )
 
 var ErrTypeAssertionFailed = errors.New("type assertion failed")
@@ -44,9 +45,25 @@ func (p *Plugin) Validate() error {
 // Execute provides the implementation of the plugin.
 func (p *Plugin) Execute() error {
 	p.Settings.Jobs = make([]Job, 1)
-	p.Settings.Client, _ = NewAWS(p)
 
-	if err := p.createSyncJobs(); err != nil {
+	client, err := aws.NewClient(
+		p.Network.Context,
+		p.Settings.Endpoint,
+		p.Settings.Region,
+		p.Settings.AccessKey,
+		p.Settings.SecretKey,
+		p.Settings.PathStyle,
+	)
+	if err != nil {
+		return fmt.Errorf("error while creating AWS client: %w", err)
+	}
+
+	client.S3.Bucket = p.Settings.Bucket
+	client.S3.DryRun = p.Settings.DryRun
+
+	client.Cloudfront.Distribution = p.Settings.CloudFrontDistribution
+
+	if err := p.createSyncJobs(p.Network.Context, client); err != nil {
 		return fmt.Errorf("error while creating sync job: %w", err)
 	}
 
@@ -58,15 +75,15 @@ func (p *Plugin) Execute() error {
 		})
 	}
 
-	if err := p.runJobs(); err != nil {
+	if err := p.runJobs(p.Network.Context, client); err != nil {
 		return fmt.Errorf("error while creating sync job: %w", err)
 	}
 
 	return nil
 }
 
-func (p *Plugin) createSyncJobs() error {
-	remote, err := p.Settings.Client.List(p.Settings.Target)
+func (p *Plugin) createSyncJobs(ctx context.Context, client *aws.Client) error {
+	remote, err := client.S3.List(ctx, aws.S3ListOpt{Path: p.Settings.Target})
 	if err != nil {
 		return err
 	}
@@ -134,8 +151,7 @@ func (p *Plugin) createSyncJobs() error {
 	return nil
 }
 
-func (p *Plugin) runJobs() error {
-	client := p.Settings.Client
+func (p *Plugin) runJobs(ctx context.Context, client *aws.Client) error {
 	jobChan := make(chan struct{}, p.Settings.MaxConcurrency)
 	results := make(chan *Result, len(p.Settings.Jobs))
 
@@ -151,11 +167,27 @@ func (p *Plugin) runJobs() error {
 
 			switch job.action {
 			case "upload":
-				err = client.Upload(job.local, job.remote)
+				opt := aws.S3UploadOpt{
+					LocalFilePath:   job.local,
+					RemoteObjectKey: job.remote,
+					ACL:             p.Settings.ACL,
+					ContentType:     p.Settings.ContentType,
+					ContentEncoding: p.Settings.ContentEncoding,
+					CacheControl:    p.Settings.CacheControl,
+					Metadata:        p.Settings.Metadata,
+				}
+				err = client.S3.Upload(ctx, opt)
 			case "redirect":
-				err = client.Redirect(job.local, job.remote)
+				opt := aws.S3RedirectOpt{
+					Path:     job.local,
+					Location: job.remote,
+				}
+				err = client.S3.Redirect(ctx, opt)
 			case "delete":
-				err = client.Delete(job.remote)
+				opt := aws.S3DeleteOpt{
+					RemoteObjectKey: job.remote,
+				}
+				err = client.S3.Delete(ctx, opt)
 			case "invalidateCloudFront":
 				invalidateJob = &job
 			default:
@@ -175,7 +207,11 @@ func (p *Plugin) runJobs() error {
 	}
 
 	if invalidateJob != nil {
-		err := client.Invalidate(invalidateJob.remote)
+		opt := aws.CloudfrontInvalidateOpt{
+			Path: invalidateJob.remote,
+		}
+
+		err := client.Cloudfront.Invalidate(ctx, opt)
 		if err != nil {
 			return fmt.Errorf("failed to %s %s to %s: %w", invalidateJob.action, invalidateJob.local, invalidateJob.remote, err)
 		}

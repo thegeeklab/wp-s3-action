@@ -9,7 +9,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/cloudfront v1.36.1
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.53.2
 	github.com/rs/zerolog v1.32.0
-	github.com/ryanuber/go-glob v1.0.0
 	github.com/stretchr/testify v1.9.0
 	github.com/thegeeklab/wp-plugin-go/v2 v2.3.1
 	github.com/urfave/cli/v2 v2.27.2

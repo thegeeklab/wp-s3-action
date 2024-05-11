@@ -1,6 +1,7 @@
 package aws
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -18,51 +19,48 @@ func TestS3Uploader_Upload(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		setup   func(t *testing.T) (*S3Uploader, func())
+		setup   func(t *testing.T) (*S3, S3UploadOpt, func())
 		wantErr bool
 	}{
 		{
 			name: "skip_upload_when_local_is_empty",
-			setup: func(t *testing.T) (*S3Uploader, func()) {
+			setup: func(t *testing.T) (*S3, S3UploadOpt, func()) {
 				t.Helper()
 
-				return &S3Uploader{
-					Opt: S3UploaderOpt{
-						Local: "",
-					},
-				}, func() {}
+				return &S3{},
+					S3UploadOpt{
+						LocalFilePath: "",
+					}, func() {}
 			},
 			wantErr: false,
 		},
 		{
 			name: "error_when_local_file_does_not_exist",
-			setup: func(t *testing.T) (*S3Uploader, func()) {
+			setup: func(t *testing.T) (*S3, S3UploadOpt, func()) {
 				t.Helper()
 
-				return &S3Uploader{
-					Opt: S3UploaderOpt{
-						Local: "/path/to/non-existent/file",
-					},
-				}, func() {}
+				return &S3{},
+					S3UploadOpt{
+						LocalFilePath: "/path/to/non-existent/file",
+					}, func() {}
 			},
 			wantErr: true,
 		},
 		{
 			name: "upload_new_file_with_default_acl_and_content_type",
-			setup: func(t *testing.T) (*S3Uploader, func()) {
+			setup: func(t *testing.T) (*S3, S3UploadOpt, func()) {
 				t.Helper()
 
-				mockS3Client := mocks.NewMockAPIClient(t)
+				mockS3Client := mocks.NewMockS3APIClient(t)
 				mockS3Client.On("HeadObject", mock.Anything, mock.Anything).Return(&s3.HeadObjectOutput{}, &s3_types.NoSuchKey{})
 				mockS3Client.On("PutObject", mock.Anything, mock.Anything).Return(&s3.PutObjectOutput{}, nil)
 
-				return &S3Uploader{
+				return &S3{
 						client: mockS3Client,
-						Opt: S3UploaderOpt{
-							Local:  createTempFile(t, "file.txt"),
-							Bucket: "test-bucket",
-							Remote: "remote/path/file.txt",
-						},
+						Bucket: "test-bucket",
+					}, S3UploadOpt{
+						LocalFilePath:   createTempFile(t, "file.txt"),
+						RemoteObjectKey: "remote/path/file.txt",
 					}, func() {
 						mockS3Client.AssertExpectations(t)
 					}
@@ -71,24 +69,23 @@ func TestS3Uploader_Upload(t *testing.T) {
 		},
 		{
 			name: "update_metadata_when_content_type_changed",
-			setup: func(t *testing.T) (*S3Uploader, func()) {
+			setup: func(t *testing.T) (*S3, S3UploadOpt, func()) {
 				t.Helper()
 
-				mockS3Client := mocks.NewMockAPIClient(t)
+				mockS3Client := mocks.NewMockS3APIClient(t)
 				mockS3Client.On("HeadObject", mock.Anything, mock.Anything).Return(&s3.HeadObjectOutput{
 					ETag:        aws.String("'5d41402abc4b2a76b9719d911017c592'"),
 					ContentType: aws.String("application/octet-stream"),
 				}, nil)
 				mockS3Client.On("CopyObject", mock.Anything, mock.Anything).Return(&s3.CopyObjectOutput{}, nil)
 
-				return &S3Uploader{
+				return &S3{
 						client: mockS3Client,
-						Opt: S3UploaderOpt{
-							Local:       createTempFile(t, "file.txt"),
-							Bucket:      "test-bucket",
-							Remote:      "remote/path/file.txt",
-							ContentType: map[string]string{"*.txt": "text/plain"},
-						},
+						Bucket: "test-bucket",
+					}, S3UploadOpt{
+						LocalFilePath:   createTempFile(t, "file.txt"),
+						RemoteObjectKey: "remote/path/file.txt",
+						ContentType:     map[string]string{"*.txt": "text/plain"},
 					}, func() {
 						mockS3Client.AssertExpectations(t)
 					}
@@ -97,10 +94,10 @@ func TestS3Uploader_Upload(t *testing.T) {
 		},
 		{
 			name: "update_metadata_when_acl_changed",
-			setup: func(t *testing.T) (*S3Uploader, func()) {
+			setup: func(t *testing.T) (*S3, S3UploadOpt, func()) {
 				t.Helper()
 
-				mockS3Client := mocks.NewMockAPIClient(t)
+				mockS3Client := mocks.NewMockS3APIClient(t)
 				mockS3Client.On("HeadObject", mock.Anything, mock.Anything).Return(&s3.HeadObjectOutput{
 					ETag:        aws.String("'5d41402abc4b2a76b9719d911017c592'"),
 					ContentType: aws.String("text/plain; charset=utf-8"),
@@ -117,14 +114,13 @@ func TestS3Uploader_Upload(t *testing.T) {
 				}, nil)
 				mockS3Client.On("CopyObject", mock.Anything, mock.Anything).Return(&s3.CopyObjectOutput{}, nil)
 
-				return &S3Uploader{
+				return &S3{
 						client: mockS3Client,
-						Opt: S3UploaderOpt{
-							Local:  createTempFile(t, "file.txt"),
-							Bucket: "test-bucket",
-							Remote: "remote/path/file.txt",
-							ACL:    map[string]string{"*.txt": "public-read"},
-						},
+						Bucket: "test-bucket",
+					}, S3UploadOpt{
+						LocalFilePath:   createTempFile(t, "file.txt"),
+						RemoteObjectKey: "remote/path/file.txt",
+						ACL:             map[string]string{"*.txt": "public-read"},
 					}, func() {
 						mockS3Client.AssertExpectations(t)
 					}
@@ -133,10 +129,10 @@ func TestS3Uploader_Upload(t *testing.T) {
 		},
 		{
 			name: "update_metadata_when_cache_control_changed",
-			setup: func(t *testing.T) (*S3Uploader, func()) {
+			setup: func(t *testing.T) (*S3, S3UploadOpt, func()) {
 				t.Helper()
 
-				mockS3Client := mocks.NewMockAPIClient(t)
+				mockS3Client := mocks.NewMockS3APIClient(t)
 				mockS3Client.On("HeadObject", mock.Anything, mock.Anything).Return(&s3.HeadObjectOutput{
 					ETag:         aws.String("'5d41402abc4b2a76b9719d911017c592'"),
 					ContentType:  aws.String("text/plain; charset=utf-8"),
@@ -144,14 +140,13 @@ func TestS3Uploader_Upload(t *testing.T) {
 				}, nil)
 				mockS3Client.On("CopyObject", mock.Anything, mock.Anything).Return(&s3.CopyObjectOutput{}, nil)
 
-				return &S3Uploader{
+				return &S3{
 						client: mockS3Client,
-						Opt: S3UploaderOpt{
-							Local:        createTempFile(t, "file.txt"),
-							Bucket:       "test-bucket",
-							Remote:       "remote/path/file.txt",
-							CacheControl: map[string]string{"*.txt": "max-age=3600"},
-						},
+						Bucket: "test-bucket",
+					}, S3UploadOpt{
+						LocalFilePath:   createTempFile(t, "file.txt"),
+						RemoteObjectKey: "remote/path/file.txt",
+						CacheControl:    map[string]string{"*.txt": "max-age=3600"},
 					}, func() {
 						mockS3Client.AssertExpectations(t)
 					}
@@ -160,10 +155,10 @@ func TestS3Uploader_Upload(t *testing.T) {
 		},
 		{
 			name: "update_metadata_when_content_encoding_changed",
-			setup: func(t *testing.T) (*S3Uploader, func()) {
+			setup: func(t *testing.T) (*S3, S3UploadOpt, func()) {
 				t.Helper()
 
-				mockS3Client := mocks.NewMockAPIClient(t)
+				mockS3Client := mocks.NewMockS3APIClient(t)
 				mockS3Client.On("HeadObject", mock.Anything, mock.Anything).Return(&s3.HeadObjectOutput{
 					ETag:            aws.String("'5d41402abc4b2a76b9719d911017c592'"),
 					ContentType:     aws.String("text/plain; charset=utf-8"),
@@ -171,14 +166,13 @@ func TestS3Uploader_Upload(t *testing.T) {
 				}, nil)
 				mockS3Client.On("CopyObject", mock.Anything, mock.Anything).Return(&s3.CopyObjectOutput{}, nil)
 
-				return &S3Uploader{
+				return &S3{
 						client: mockS3Client,
-						Opt: S3UploaderOpt{
-							Local:           createTempFile(t, "file.txt"),
-							Bucket:          "test-bucket",
-							Remote:          "remote/path/file.txt",
-							ContentEncoding: map[string]string{"*.txt": "gzip"},
-						},
+						Bucket: "test-bucket",
+					}, S3UploadOpt{
+						LocalFilePath:   createTempFile(t, "file.txt"),
+						RemoteObjectKey: "remote/path/file.txt",
+						ContentEncoding: map[string]string{"*.txt": "gzip"},
 					}, func() {
 						mockS3Client.AssertExpectations(t)
 					}
@@ -187,10 +181,10 @@ func TestS3Uploader_Upload(t *testing.T) {
 		},
 		{
 			name: "update_metadata_when_metadata_changed",
-			setup: func(t *testing.T) (*S3Uploader, func()) {
+			setup: func(t *testing.T) (*S3, S3UploadOpt, func()) {
 				t.Helper()
 
-				mockS3Client := mocks.NewMockAPIClient(t)
+				mockS3Client := mocks.NewMockS3APIClient(t)
 				mockS3Client.On("HeadObject", mock.Anything, mock.Anything).Return(&s3.HeadObjectOutput{
 					ETag:        aws.String("'5d41402abc4b2a76b9719d911017c592'"),
 					ContentType: aws.String("text/plain; charset=utf-8"),
@@ -198,14 +192,13 @@ func TestS3Uploader_Upload(t *testing.T) {
 				}, nil)
 				mockS3Client.On("CopyObject", mock.Anything, mock.Anything).Return(&s3.CopyObjectOutput{}, nil)
 
-				return &S3Uploader{
+				return &S3{
 						client: mockS3Client,
-						Opt: S3UploaderOpt{
-							Local:    createTempFile(t, "file.txt"),
-							Bucket:   "test-bucket",
-							Remote:   "remote/path/file.txt",
-							Metadata: map[string]map[string]string{"*.txt": {"key": "value"}},
-						},
+						Bucket: "test-bucket",
+					}, S3UploadOpt{
+						LocalFilePath:   createTempFile(t, "file.txt"),
+						RemoteObjectKey: "remote/path/file.txt",
+						Metadata:        map[string]map[string]string{"*.txt": {"key": "value"}},
 					}, func() {
 						mockS3Client.AssertExpectations(t)
 					}
@@ -214,20 +207,19 @@ func TestS3Uploader_Upload(t *testing.T) {
 		},
 		{
 			name: "upload_new_file_when_dry_run_is_true",
-			setup: func(t *testing.T) (*S3Uploader, func()) {
+			setup: func(t *testing.T) (*S3, S3UploadOpt, func()) {
 				t.Helper()
 
-				mockS3Client := mocks.NewMockAPIClient(t)
+				mockS3Client := mocks.NewMockS3APIClient(t)
 				mockS3Client.On("HeadObject", mock.Anything, mock.Anything).Return(&s3.HeadObjectOutput{}, &s3_types.NoSuchKey{})
 
-				return &S3Uploader{
+				return &S3{
 						client: mockS3Client,
-						Opt: S3UploaderOpt{
-							Local:  createTempFile(t, "file1.txt"),
-							Bucket: "test-bucket",
-							Remote: "remote/path/file1.txt",
-							DryRun: true,
-						},
+						Bucket: "test-bucket",
+						DryRun: true,
+					}, S3UploadOpt{
+						LocalFilePath:   createTempFile(t, "file1.txt"),
+						RemoteObjectKey: "remote/path/file1.txt",
 					}, func() {
 						mockS3Client.AssertExpectations(t)
 					}
@@ -241,10 +233,10 @@ func TestS3Uploader_Upload(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			uploader, teardown := tt.setup(t)
+			upload, opt, teardown := tt.setup(t)
 			defer teardown()
 
-			err := uploader.Upload()
+			err := upload.Upload(context.Background(), opt)
 			if tt.wantErr {
 				assert.Error(t, err)
 

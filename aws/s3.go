@@ -9,38 +9,62 @@ import (
 	"mime"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/cloudfront"
+	cf_types "github.com/aws/aws-sdk-go-v2/service/cloudfront/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	s3_types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/rs/zerolog/log"
 )
 
 type Client struct {
-	client     APIClient
-	cloudfront *cloudfront.Client
+	S3         *S3
+	Cloudfront *Cloudfront
 }
 
-type S3Uploader struct {
-	client APIClient
-	Opt    S3UploaderOpt
+type Cloudfront struct {
+	client       CloudfrontAPIClient
+	Distribution string
 }
 
-type S3UploaderOpt struct {
-	Local           string
-	Remote          string
+type CloudfrontInvalidateOpt struct {
+	Path string
+}
+
+type S3 struct {
+	client S3APIClient
+	Bucket string
+	DryRun bool
+}
+
+type S3UploadOpt struct {
+	LocalFilePath   string
+	RemoteObjectKey string
 	ACL             map[string]string
 	ContentType     map[string]string
 	ContentEncoding map[string]string
 	CacheControl    map[string]string
 	Metadata        map[string]map[string]string
-	Bucket          string
-	DryRun          bool
 }
 
+type S3RedirectOpt struct {
+	Path     string
+	Location string
+}
+
+type S3DeleteOpt struct {
+	RemoteObjectKey string
+}
+
+type S3ListOpt struct {
+	Path string
+}
+
+// NewClient creates a new S3 client with the provided configuration.
 func NewClient(ctx context.Context, url, region, accessKey, secretKey string, pathStyle bool) (*Client, error) {
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(region))
 	if err != nil {
@@ -62,59 +86,59 @@ func NewClient(ctx context.Context, url, region, accessKey, secretKey string, pa
 	cf := cloudfront.NewFromConfig(cfg)
 
 	return &Client{
-		client:     c,
-		cloudfront: cf,
+		S3:         &S3{client: c},
+		Cloudfront: &Cloudfront{client: cf},
 	}, nil
 }
 
-// Upload uploads a file to an S3 bucket. It first checks if the file already exists in the
-// bucket and if the content and metadata have not changed. If the file has not changed,
-// it skips the upload and just updates the metadata. If the file has changed, it uploads
-// the new file to the bucket.
-func (u *S3Uploader) Upload() error {
-	if u.Opt.Local == "" {
+// Upload uploads a file to an S3 bucket. It first checks if the file already exists in the bucket
+// and compares the local file's content and metadata with the remote file. If the file has changed,
+// it updates the remote file's metadata. If the file does not exist or has changed,
+// it uploads the local file to the remote bucket.
+func (u *S3) Upload(ctx context.Context, opt S3UploadOpt) error {
+	if opt.LocalFilePath == "" {
 		return nil
 	}
 
-	file, err := os.Open(u.Opt.Local)
+	file, err := os.Open(opt.LocalFilePath)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
 
-	acl := getACL(u.Opt.Local, u.Opt.ACL)
-	contentType := getContentType(u.Opt.Local, u.Opt.ContentType)
-	contentEncoding := getContentEncoding(u.Opt.Local, u.Opt.ContentEncoding)
-	cacheControl := getCacheControl(u.Opt.Local, u.Opt.CacheControl)
-	metadata := getMetadata(u.Opt.Local, u.Opt.Metadata)
+	acl := getACL(opt.LocalFilePath, opt.ACL)
+	contentType := getContentType(opt.LocalFilePath, opt.ContentType)
+	contentEncoding := getContentEncoding(opt.LocalFilePath, opt.ContentEncoding)
+	cacheControl := getCacheControl(opt.LocalFilePath, opt.CacheControl)
+	metadata := getMetadata(opt.LocalFilePath, opt.Metadata)
 
-	head, err := u.client.HeadObject(context.TODO(), &s3.HeadObjectInput{
-		Bucket: &u.Opt.Bucket,
-		Key:    &u.Opt.Remote,
+	head, err := u.client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: &u.Bucket,
+		Key:    &opt.RemoteObjectKey,
 	})
 	if err != nil {
-		var noSuchKeyError *types.NoSuchKey
+		var noSuchKeyError *s3_types.NoSuchKey
 		if !errors.As(err, &noSuchKeyError) {
 			return err
 		}
 
 		log.Debug().Msgf(
 			"'%s' not found in bucket, uploading with content-type '%s' and permissions '%s'",
-			u.Opt.Local,
+			opt.LocalFilePath,
 			contentType,
 			acl,
 		)
 
-		if u.Opt.DryRun {
+		if u.DryRun {
 			return nil
 		}
 
-		_, err = u.client.PutObject(context.TODO(), &s3.PutObjectInput{
-			Bucket:          &u.Opt.Bucket,
-			Key:             &u.Opt.Remote,
+		_, err = u.client.PutObject(ctx, &s3.PutObjectInput{
+			Bucket:          &u.Bucket,
+			Key:             &opt.RemoteObjectKey,
 			Body:            file,
 			ContentType:     &contentType,
-			ACL:             types.ObjectCannedACL(acl),
+			ACL:             s3_types.ObjectCannedACL(acl),
 			Metadata:        metadata,
 			CacheControl:    &cacheControl,
 			ContentEncoding: &contentEncoding,
@@ -129,27 +153,29 @@ func (u *S3Uploader) Upload() error {
 	sum := fmt.Sprintf("'%x'", hash.Sum(nil))
 
 	if sum == *head.ETag {
-		shouldCopy, reason := u.shouldCopyObject(head, contentType, acl, contentEncoding, cacheControl, metadata)
+		shouldCopy, reason := u.shouldCopyObject(
+			ctx, head, opt.LocalFilePath, opt.RemoteObjectKey, contentType, acl, contentEncoding, cacheControl, metadata,
+		)
 		if !shouldCopy {
-			log.Debug().Msgf("skipping '%s' because hashes and metadata match", u.Opt.Local)
+			log.Debug().Msgf("skipping '%s' because hashes and metadata match", opt.LocalFilePath)
 
 			return nil
 		}
 
-		log.Debug().Msgf("updating metadata for '%s' %s", u.Opt.Local, reason)
+		log.Debug().Msgf("updating metadata for '%s' %s", opt.LocalFilePath, reason)
 
-		if u.Opt.DryRun {
+		if u.DryRun {
 			return nil
 		}
 
-		_, err = u.client.CopyObject(context.Background(), &s3.CopyObjectInput{
-			Bucket:            &u.Opt.Bucket,
-			Key:               &u.Opt.Remote,
-			CopySource:        aws.String(fmt.Sprintf("%s/%s", u.Opt.Bucket, u.Opt.Remote)),
-			ACL:               types.ObjectCannedACL(acl),
+		_, err = u.client.CopyObject(ctx, &s3.CopyObjectInput{
+			Bucket:            &u.Bucket,
+			Key:               &opt.RemoteObjectKey,
+			CopySource:        aws.String(fmt.Sprintf("%s/%s", u.Bucket, opt.RemoteObjectKey)),
+			ACL:               s3_types.ObjectCannedACL(acl),
 			ContentType:       &contentType,
 			Metadata:          metadata,
-			MetadataDirective: types.MetadataDirectiveReplace,
+			MetadataDirective: s3_types.MetadataDirectiveReplace,
 			CacheControl:      &cacheControl,
 			ContentEncoding:   &contentEncoding,
 		})
@@ -162,18 +188,18 @@ func (u *S3Uploader) Upload() error {
 		return err
 	}
 
-	log.Debug().Msgf("uploading '%s' with content-type '%s' and permissions '%s'", u.Opt.Local, contentType, acl)
+	log.Debug().Msgf("uploading '%s' with content-type '%s' and permissions '%s'", opt.LocalFilePath, contentType, acl)
 
-	if u.Opt.DryRun {
+	if u.DryRun {
 		return nil
 	}
 
-	_, err = u.client.PutObject(context.TODO(), &s3.PutObjectInput{
-		Bucket:          &u.Opt.Bucket,
-		Key:             &u.Opt.Remote,
+	_, err = u.client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:          &u.Bucket,
+		Key:             &opt.RemoteObjectKey,
 		Body:            file,
 		ContentType:     &contentType,
-		ACL:             types.ObjectCannedACL(acl),
+		ACL:             s3_types.ObjectCannedACL(acl),
 		Metadata:        metadata,
 		CacheControl:    &cacheControl,
 		ContentEncoding: &contentEncoding,
@@ -188,8 +214,10 @@ func (u *S3Uploader) Upload() error {
 // along with a string describing the reason for the copy if applicable.
 //
 //nolint:gocognit
-func (u *S3Uploader) shouldCopyObject(
-	head *s3.HeadObjectOutput, contentType, acl, contentEncoding, cacheControl string, metadata map[string]string,
+func (u *S3) shouldCopyObject(
+	ctx context.Context, head *s3.HeadObjectOutput,
+	local, remote, contentType, acl, contentEncoding, cacheControl string,
+	metadata map[string]string,
 ) (bool, string) {
 	var reason string
 
@@ -230,7 +258,7 @@ func (u *S3Uploader) shouldCopyObject(
 	}
 
 	if len(head.Metadata) != len(metadata) {
-		reason = fmt.Sprintf("count of metadata values has changed for %s", u.Opt.Local)
+		reason = fmt.Sprintf("count of metadata values has changed for %s", local)
 
 		return true, reason
 	}
@@ -239,7 +267,7 @@ func (u *S3Uploader) shouldCopyObject(
 		for k, v := range metadata {
 			if hv, ok := head.Metadata[k]; ok {
 				if v != hv {
-					reason = fmt.Sprintf("metadata values have changed for %s", u.Opt.Local)
+					reason = fmt.Sprintf("metadata values have changed for %s", remote)
 
 					return true, reason
 				}
@@ -247,9 +275,9 @@ func (u *S3Uploader) shouldCopyObject(
 		}
 	}
 
-	grant, err := u.client.GetObjectAcl(context.TODO(), &s3.GetObjectAclInput{
-		Bucket: &u.Opt.Bucket,
-		Key:    &u.Opt.Remote,
+	grant, err := u.client.GetObjectAcl(ctx, &s3.GetObjectAclInput{
+		Bucket: &u.Bucket,
+		Key:    &remote,
 	})
 	if err != nil {
 		return false, ""
@@ -276,7 +304,7 @@ func (u *S3Uploader) shouldCopyObject(
 	}
 
 	if previousACL != acl {
-		reason = fmt.Sprintf("permissions for '%s' have changed from '%s' to '%s'", u.Opt.Remote, previousACL, acl)
+		reason = fmt.Sprintf("permissions for '%s' have changed from '%s' to '%s'", remote, previousACL, acl)
 
 		return true, reason
 	}
@@ -341,4 +369,88 @@ func getMetadata(file string, patterns map[string]map[string]string) map[string]
 	}
 
 	return metadata
+}
+
+func (u *S3) Redirect(ctx context.Context, opt S3RedirectOpt) error {
+	log.Debug().Msgf("adding redirect from '%s' to '%s'", opt.Path, opt.Location)
+
+	if u.DryRun {
+		return nil
+	}
+
+	_, err := u.client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:                  aws.String(u.Bucket),
+		Key:                     aws.String(opt.Path),
+		ACL:                     s3_types.ObjectCannedACLPublicRead,
+		WebsiteRedirectLocation: aws.String(opt.Location),
+	})
+
+	return err
+}
+
+func (u *S3) Delete(ctx context.Context, opt S3DeleteOpt) error {
+	log.Debug().Msgf("removing remote file '%s'", opt.RemoteObjectKey)
+
+	if u.DryRun {
+		return nil
+	}
+
+	_, err := u.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(u.Bucket),
+		Key:    aws.String(opt.RemoteObjectKey),
+	})
+
+	return err
+}
+
+func (u *S3) List(ctx context.Context, opt S3ListOpt) ([]string, error) {
+	remote := make([]string, 0)
+
+	resp, err := u.client.ListObjects(ctx, &s3.ListObjectsInput{
+		Bucket: aws.String(u.Bucket),
+		Prefix: aws.String(opt.Path),
+	})
+	if err != nil {
+		return remote, err
+	}
+
+	for _, item := range resp.Contents {
+		remote = append(remote, *item.Key)
+	}
+
+	for *resp.IsTruncated {
+		resp, err = u.client.ListObjects(ctx, &s3.ListObjectsInput{
+			Bucket: aws.String(u.Bucket),
+			Prefix: aws.String(opt.Path),
+			Marker: aws.String(remote[len(remote)-1]),
+		})
+		if err != nil {
+			return remote, err
+		}
+
+		for _, item := range resp.Contents {
+			remote = append(remote, *item.Key)
+		}
+	}
+
+	return remote, nil
+}
+
+func (c *Cloudfront) Invalidate(ctx context.Context, opt CloudfrontInvalidateOpt) error {
+	log.Debug().Msgf("invalidating '%s'", opt.Path)
+
+	_, err := c.client.CreateInvalidation(ctx, &cloudfront.CreateInvalidationInput{
+		DistributionId: aws.String(c.Distribution),
+		InvalidationBatch: &cf_types.InvalidationBatch{
+			CallerReference: aws.String(time.Now().Format(time.RFC3339Nano)),
+			Paths: &cf_types.Paths{
+				Quantity: aws.Int32(1),
+				Items: []string{
+					opt.Path,
+				},
+			},
+		},
+	})
+
+	return err
 }
