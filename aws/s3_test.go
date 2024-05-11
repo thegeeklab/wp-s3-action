@@ -15,6 +15,15 @@ import (
 	"github.com/thegeeklab/wp-s3-action/aws/mocks"
 )
 
+func createTempFile(t *testing.T, name string) string {
+	t.Helper()
+
+	name = filepath.Join(t.TempDir(), name)
+	_ = os.WriteFile(name, []byte("hello"), 0o600)
+
+	return name
+}
+
 func TestS3Uploader_Upload(t *testing.T) {
 	t.Parallel()
 
@@ -24,7 +33,7 @@ func TestS3Uploader_Upload(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "skip_upload_when_local_is_empty",
+			name: "skip upload when local is empty",
 			setup: func(t *testing.T) (*S3, S3UploadOptions, func()) {
 				t.Helper()
 
@@ -36,7 +45,7 @@ func TestS3Uploader_Upload(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "error_when_local_file_does_not_exist",
+			name: "error when local file does not exist",
 			setup: func(t *testing.T) (*S3, S3UploadOptions, func()) {
 				t.Helper()
 
@@ -48,7 +57,7 @@ func TestS3Uploader_Upload(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "upload_new_file_with_default_acl_and_content_type",
+			name: "upload new file with default acl and content type",
 			setup: func(t *testing.T) (*S3, S3UploadOptions, func()) {
 				t.Helper()
 
@@ -69,7 +78,7 @@ func TestS3Uploader_Upload(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "update_metadata_when_content_type_changed",
+			name: "update metadata when content type changed",
 			setup: func(t *testing.T) (*S3, S3UploadOptions, func()) {
 				t.Helper()
 
@@ -94,7 +103,7 @@ func TestS3Uploader_Upload(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "update_metadata_when_acl_changed",
+			name: "update metadata when acl changed",
 			setup: func(t *testing.T) (*S3, S3UploadOptions, func()) {
 				t.Helper()
 
@@ -129,7 +138,7 @@ func TestS3Uploader_Upload(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "update_metadata_when_cache_control_changed",
+			name: "update metadata when cache control changed",
 			setup: func(t *testing.T) (*S3, S3UploadOptions, func()) {
 				t.Helper()
 
@@ -155,7 +164,7 @@ func TestS3Uploader_Upload(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "update_metadata_when_content_encoding_changed",
+			name: "update metadata when content encoding changed",
 			setup: func(t *testing.T) (*S3, S3UploadOptions, func()) {
 				t.Helper()
 
@@ -181,7 +190,7 @@ func TestS3Uploader_Upload(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "update_metadata_when_metadata_changed",
+			name: "update metadata when metadata changed",
 			setup: func(t *testing.T) (*S3, S3UploadOptions, func()) {
 				t.Helper()
 
@@ -207,7 +216,7 @@ func TestS3Uploader_Upload(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "upload_new_file_when_dry_run_is_true",
+			name: "upload new file when dry run is true",
 			setup: func(t *testing.T) (*S3, S3UploadOptions, func()) {
 				t.Helper()
 
@@ -249,15 +258,6 @@ func TestS3Uploader_Upload(t *testing.T) {
 	}
 }
 
-func createTempFile(t *testing.T, name string) string {
-	t.Helper()
-
-	name = filepath.Join(t.TempDir(), name)
-	_ = os.WriteFile(name, []byte("hello"), 0o600)
-
-	return name
-}
-
 func TestS3_Redirect(t *testing.T) {
 	t.Parallel()
 
@@ -267,7 +267,7 @@ func TestS3_Redirect(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "redirect_with_valid_options",
+			name: "redirect with valid options",
 			setup: func(t *testing.T) (*S3, S3RedirectOptions, func()) {
 				t.Helper()
 
@@ -287,7 +287,7 @@ func TestS3_Redirect(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "skip_redirect_when_dry_run_is_true",
+			name: "skip redirect when dry run is true",
 			setup: func(t *testing.T) (*S3, S3RedirectOptions, func()) {
 				t.Helper()
 
@@ -307,7 +307,7 @@ func TestS3_Redirect(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "error_when_put_object_fails",
+			name: "error when put object fails",
 			setup: func(t *testing.T) (*S3, S3RedirectOptions, func()) {
 				t.Helper()
 
@@ -359,7 +359,7 @@ func TestS3_Delete(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "delete_existing_object",
+			name: "delete existing object",
 			setup: func(t *testing.T) (*S3, S3DeleteOptions, func()) {
 				t.Helper()
 
@@ -378,7 +378,7 @@ func TestS3_Delete(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "skip_delete_when_dry_run_is_true",
+			name: "skip delete when dry run is true",
 			setup: func(t *testing.T) (*S3, S3DeleteOptions, func()) {
 				t.Helper()
 
@@ -397,7 +397,7 @@ func TestS3_Delete(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "error_when_delete_object_fails",
+			name: "error when delete object fails",
 			setup: func(t *testing.T) (*S3, S3DeleteOptions, func()) {
 				t.Helper()
 
@@ -449,7 +449,7 @@ func TestS3_Delete(t *testing.T) {
 // 		want    []string
 // 	}{
 // 		{
-// 			name: "list_objects_in_prefix",
+// 			name: "list objects in prefix",
 // 			setup: func(t *testing.T) (*S3, S3ListOptions, func()) {
 // 				t.Helper()
 
@@ -474,7 +474,7 @@ func TestS3_Delete(t *testing.T) {
 // 			want:    []string{"prefix/file1.txt", "prefix/file2.txt"},
 // 		},
 // 		{
-// 			name: "list_objects_with_pagination",
+// 			name: "list objects with pagination",
 // 			setup: func(t *testing.T) (*S3, S3ListOptions, func()) {
 // 				t.Helper()
 
@@ -504,7 +504,7 @@ func TestS3_Delete(t *testing.T) {
 // 			want:    []string{"prefix/file1.txt", "prefix/file2.txt", "prefix/file3.txt"},
 // 		},
 // 		{
-// 			name: "error_when_list_objects_fails",
+// 			name: "error when list objects fails",
 // 			setup: func(t *testing.T) (*S3, S3ListOptions, func()) {
 // 				t.Helper()
 
