@@ -41,7 +41,7 @@ type S3 struct {
 	DryRun bool
 }
 
-type S3UploadOpt struct {
+type S3UploadOptions struct {
 	LocalFilePath   string
 	RemoteObjectKey string
 	ACL             map[string]string
@@ -51,16 +51,16 @@ type S3UploadOpt struct {
 	Metadata        map[string]map[string]string
 }
 
-type S3RedirectOpt struct {
+type S3RedirectOptions struct {
 	Path     string
 	Location string
 }
 
-type S3DeleteOpt struct {
+type S3DeleteOptions struct {
 	RemoteObjectKey string
 }
 
-type S3ListOpt struct {
+type S3ListOptions struct {
 	Path string
 }
 
@@ -95,7 +95,7 @@ func NewClient(ctx context.Context, url, region, accessKey, secretKey string, pa
 // and compares the local file's content and metadata with the remote file. If the file has changed,
 // it updates the remote file's metadata. If the file does not exist or has changed,
 // it uploads the local file to the remote bucket.
-func (u *S3) Upload(ctx context.Context, opt S3UploadOpt) error {
+func (u *S3) Upload(ctx context.Context, opt S3UploadOptions) error {
 	if opt.LocalFilePath == "" {
 		return nil
 	}
@@ -371,7 +371,7 @@ func getMetadata(file string, patterns map[string]map[string]string) map[string]
 	return metadata
 }
 
-func (u *S3) Redirect(ctx context.Context, opt S3RedirectOpt) error {
+func (u *S3) Redirect(ctx context.Context, opt S3RedirectOptions) error {
 	log.Debug().Msgf("adding redirect from '%s' to '%s'", opt.Path, opt.Location)
 
 	if u.DryRun {
@@ -388,7 +388,7 @@ func (u *S3) Redirect(ctx context.Context, opt S3RedirectOpt) error {
 	return err
 }
 
-func (u *S3) Delete(ctx context.Context, opt S3DeleteOpt) error {
+func (u *S3) Delete(ctx context.Context, opt S3DeleteOptions) error {
 	log.Debug().Msgf("removing remote file '%s'", opt.RemoteObjectKey)
 
 	if u.DryRun {
@@ -403,7 +403,7 @@ func (u *S3) Delete(ctx context.Context, opt S3DeleteOpt) error {
 	return err
 }
 
-func (u *S3) List(ctx context.Context, opt S3ListOpt) ([]string, error) {
+func (u *S3) List(ctx context.Context, opt S3ListOptions) ([]string, error) {
 	remote := make([]string, 0)
 
 	resp, err := u.client.ListObjects(ctx, &s3.ListObjectsInput{

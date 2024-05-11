@@ -83,7 +83,7 @@ func (p *Plugin) Execute() error {
 }
 
 func (p *Plugin) createSyncJobs(ctx context.Context, client *aws.Client) error {
-	remote, err := client.S3.List(ctx, aws.S3ListOpt{Path: p.Settings.Target})
+	remote, err := client.S3.List(ctx, aws.S3ListOptions{Path: p.Settings.Target})
 	if err != nil {
 		return err
 	}
@@ -167,7 +167,7 @@ func (p *Plugin) runJobs(ctx context.Context, client *aws.Client) error {
 
 			switch job.action {
 			case "upload":
-				opt := aws.S3UploadOpt{
+				opt := aws.S3UploadOptions{
 					LocalFilePath:   job.local,
 					RemoteObjectKey: job.remote,
 					ACL:             p.Settings.ACL,
@@ -178,13 +178,13 @@ func (p *Plugin) runJobs(ctx context.Context, client *aws.Client) error {
 				}
 				err = client.S3.Upload(ctx, opt)
 			case "redirect":
-				opt := aws.S3RedirectOpt{
+				opt := aws.S3RedirectOptions{
 					Path:     job.local,
 					Location: job.remote,
 				}
 				err = client.S3.Redirect(ctx, opt)
 			case "delete":
-				opt := aws.S3DeleteOpt{
+				opt := aws.S3DeleteOptions{
 					RemoteObjectKey: job.remote,
 				}
 				err = client.S3.Delete(ctx, opt)

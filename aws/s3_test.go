@@ -19,16 +19,16 @@ func TestS3Uploader_Upload(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		setup   func(t *testing.T) (*S3, S3UploadOpt, func())
+		setup   func(t *testing.T) (*S3, S3UploadOptions, func())
 		wantErr bool
 	}{
 		{
 			name: "skip_upload_when_local_is_empty",
-			setup: func(t *testing.T) (*S3, S3UploadOpt, func()) {
+			setup: func(t *testing.T) (*S3, S3UploadOptions, func()) {
 				t.Helper()
 
 				return &S3{},
-					S3UploadOpt{
+					S3UploadOptions{
 						LocalFilePath: "",
 					}, func() {}
 			},
@@ -36,11 +36,11 @@ func TestS3Uploader_Upload(t *testing.T) {
 		},
 		{
 			name: "error_when_local_file_does_not_exist",
-			setup: func(t *testing.T) (*S3, S3UploadOpt, func()) {
+			setup: func(t *testing.T) (*S3, S3UploadOptions, func()) {
 				t.Helper()
 
 				return &S3{},
-					S3UploadOpt{
+					S3UploadOptions{
 						LocalFilePath: "/path/to/non-existent/file",
 					}, func() {}
 			},
@@ -48,7 +48,7 @@ func TestS3Uploader_Upload(t *testing.T) {
 		},
 		{
 			name: "upload_new_file_with_default_acl_and_content_type",
-			setup: func(t *testing.T) (*S3, S3UploadOpt, func()) {
+			setup: func(t *testing.T) (*S3, S3UploadOptions, func()) {
 				t.Helper()
 
 				mockS3Client := mocks.NewMockS3APIClient(t)
@@ -58,7 +58,7 @@ func TestS3Uploader_Upload(t *testing.T) {
 				return &S3{
 						client: mockS3Client,
 						Bucket: "test-bucket",
-					}, S3UploadOpt{
+					}, S3UploadOptions{
 						LocalFilePath:   createTempFile(t, "file.txt"),
 						RemoteObjectKey: "remote/path/file.txt",
 					}, func() {
@@ -69,7 +69,7 @@ func TestS3Uploader_Upload(t *testing.T) {
 		},
 		{
 			name: "update_metadata_when_content_type_changed",
-			setup: func(t *testing.T) (*S3, S3UploadOpt, func()) {
+			setup: func(t *testing.T) (*S3, S3UploadOptions, func()) {
 				t.Helper()
 
 				mockS3Client := mocks.NewMockS3APIClient(t)
@@ -82,7 +82,7 @@ func TestS3Uploader_Upload(t *testing.T) {
 				return &S3{
 						client: mockS3Client,
 						Bucket: "test-bucket",
-					}, S3UploadOpt{
+					}, S3UploadOptions{
 						LocalFilePath:   createTempFile(t, "file.txt"),
 						RemoteObjectKey: "remote/path/file.txt",
 						ContentType:     map[string]string{"*.txt": "text/plain"},
@@ -94,7 +94,7 @@ func TestS3Uploader_Upload(t *testing.T) {
 		},
 		{
 			name: "update_metadata_when_acl_changed",
-			setup: func(t *testing.T) (*S3, S3UploadOpt, func()) {
+			setup: func(t *testing.T) (*S3, S3UploadOptions, func()) {
 				t.Helper()
 
 				mockS3Client := mocks.NewMockS3APIClient(t)
@@ -117,7 +117,7 @@ func TestS3Uploader_Upload(t *testing.T) {
 				return &S3{
 						client: mockS3Client,
 						Bucket: "test-bucket",
-					}, S3UploadOpt{
+					}, S3UploadOptions{
 						LocalFilePath:   createTempFile(t, "file.txt"),
 						RemoteObjectKey: "remote/path/file.txt",
 						ACL:             map[string]string{"*.txt": "public-read"},
@@ -129,7 +129,7 @@ func TestS3Uploader_Upload(t *testing.T) {
 		},
 		{
 			name: "update_metadata_when_cache_control_changed",
-			setup: func(t *testing.T) (*S3, S3UploadOpt, func()) {
+			setup: func(t *testing.T) (*S3, S3UploadOptions, func()) {
 				t.Helper()
 
 				mockS3Client := mocks.NewMockS3APIClient(t)
@@ -143,7 +143,7 @@ func TestS3Uploader_Upload(t *testing.T) {
 				return &S3{
 						client: mockS3Client,
 						Bucket: "test-bucket",
-					}, S3UploadOpt{
+					}, S3UploadOptions{
 						LocalFilePath:   createTempFile(t, "file.txt"),
 						RemoteObjectKey: "remote/path/file.txt",
 						CacheControl:    map[string]string{"*.txt": "max-age=3600"},
@@ -155,7 +155,7 @@ func TestS3Uploader_Upload(t *testing.T) {
 		},
 		{
 			name: "update_metadata_when_content_encoding_changed",
-			setup: func(t *testing.T) (*S3, S3UploadOpt, func()) {
+			setup: func(t *testing.T) (*S3, S3UploadOptions, func()) {
 				t.Helper()
 
 				mockS3Client := mocks.NewMockS3APIClient(t)
@@ -169,7 +169,7 @@ func TestS3Uploader_Upload(t *testing.T) {
 				return &S3{
 						client: mockS3Client,
 						Bucket: "test-bucket",
-					}, S3UploadOpt{
+					}, S3UploadOptions{
 						LocalFilePath:   createTempFile(t, "file.txt"),
 						RemoteObjectKey: "remote/path/file.txt",
 						ContentEncoding: map[string]string{"*.txt": "gzip"},
@@ -181,7 +181,7 @@ func TestS3Uploader_Upload(t *testing.T) {
 		},
 		{
 			name: "update_metadata_when_metadata_changed",
-			setup: func(t *testing.T) (*S3, S3UploadOpt, func()) {
+			setup: func(t *testing.T) (*S3, S3UploadOptions, func()) {
 				t.Helper()
 
 				mockS3Client := mocks.NewMockS3APIClient(t)
@@ -195,7 +195,7 @@ func TestS3Uploader_Upload(t *testing.T) {
 				return &S3{
 						client: mockS3Client,
 						Bucket: "test-bucket",
-					}, S3UploadOpt{
+					}, S3UploadOptions{
 						LocalFilePath:   createTempFile(t, "file.txt"),
 						RemoteObjectKey: "remote/path/file.txt",
 						Metadata:        map[string]map[string]string{"*.txt": {"key": "value"}},
@@ -207,7 +207,7 @@ func TestS3Uploader_Upload(t *testing.T) {
 		},
 		{
 			name: "upload_new_file_when_dry_run_is_true",
-			setup: func(t *testing.T) (*S3, S3UploadOpt, func()) {
+			setup: func(t *testing.T) (*S3, S3UploadOptions, func()) {
 				t.Helper()
 
 				mockS3Client := mocks.NewMockS3APIClient(t)
@@ -217,7 +217,7 @@ func TestS3Uploader_Upload(t *testing.T) {
 						client: mockS3Client,
 						Bucket: "test-bucket",
 						DryRun: true,
-					}, S3UploadOpt{
+					}, S3UploadOptions{
 						LocalFilePath:   createTempFile(t, "file1.txt"),
 						RemoteObjectKey: "remote/path/file1.txt",
 					}, func() {
