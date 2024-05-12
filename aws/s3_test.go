@@ -24,7 +24,7 @@ func createTempFile(t *testing.T, name string) string {
 	return name
 }
 
-func TestS3Uploader_Upload(t *testing.T) {
+func TestS3_Upload(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -439,111 +439,118 @@ func TestS3_Delete(t *testing.T) {
 	}
 }
 
-// func TestS3_List(t *testing.T) {
-// 	t.Parallel()
+func TestS3_List(t *testing.T) {
+	t.Parallel()
 
-// 	tests := []struct {
-// 		name    string
-// 		setup   func(t *testing.T) (*S3, S3ListOptions, func())
-// 		wantErr bool
-// 		want    []string
-// 	}{
-// 		{
-// 			name: "list objects in prefix",
-// 			setup: func(t *testing.T) (*S3, S3ListOptions, func()) {
-// 				t.Helper()
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) (*S3, S3ListOptions, func())
+		wantErr bool
+		want    []string
+	}{
+		{
+			name: "list objects in prefix",
+			setup: func(t *testing.T) (*S3, S3ListOptions, func()) {
+				t.Helper()
 
-// 				mockS3Client := mocks.NewMockS3APIClient(t)
-// 				mockS3Client.On("ListObjects", mock.Anything, mock.Anything).Return(&s3.ListObjectsOutput{
-// 					Contents: []types.Object{
-// 						{Key: aws.String("prefix/file1.txt")},
-// 						{Key: aws.String("prefix/file2.txt")},
-// 					},
-// 				}, nil)
+				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.On("ListObjects", mock.Anything, mock.Anything).Return(&s3.ListObjectsOutput{
+					Contents: []types.Object{
+						{Key: aws.String("prefix/file1.txt")},
+						{Key: aws.String("prefix/file2.txt")},
+					},
+					IsTruncated: aws.Bool(false),
+				}, nil)
 
-// 				return &S3{
-// 						client: mockS3Client,
-// 						Bucket: "test-bucket",
-// 					}, S3ListOptions{
-// 						Path: "prefix/",
-// 					}, func() {
-// 						mockS3Client.AssertExpectations(t)
-// 					}
-// 			},
-// 			wantErr: false,
-// 			want:    []string{"prefix/file1.txt", "prefix/file2.txt"},
-// 		},
-// 		{
-// 			name: "list objects with pagination",
-// 			setup: func(t *testing.T) (*S3, S3ListOptions, func()) {
-// 				t.Helper()
+				return &S3{
+						client: mockS3Client,
+						Bucket: "test-bucket",
+					}, S3ListOptions{
+						Path: "prefix/",
+					}, func() {
+						mockS3Client.AssertExpectations(t)
+					}
+			},
+			wantErr: false,
+			want:    []string{"prefix/file1.txt", "prefix/file2.txt"},
+		},
+		{
+			name: "list objects with pagination",
+			setup: func(t *testing.T) (*S3, S3ListOptions, func()) {
+				t.Helper()
 
-// 				mockS3Client := mocks.NewMockS3APIClient(t)
-// 				mockS3Client.On("ListObjects", mock.Anything, mock.MatchedBy(func(input *s3.ListObjectsInput) bool {
-// 					return *input.Marker == ""
-// 				})).Return(&s3.ListObjectsOutput{
-// 					Contents:    []types.Object{{Key: aws.String("prefix/file1.txt")}, {Key: aws.String("prefix/file2.txt")}},
-// 					IsTruncated: aws.Bool(true),
-// 				}, nil)
-// 				mockS3Client.On("ListObjects", mock.Anything, mock.MatchedBy(func(input *s3.ListObjectsInput) bool {
-// 					return *input.Marker == "prefix/file2.txt"
-// 				})).Return(&s3.ListObjectsOutput{
-// 					Contents: []types.Object{{Key: aws.String("prefix/file3.txt")}},
-// 				}, nil)
+				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.On("ListObjects", mock.Anything, mock.MatchedBy(func(input *s3.ListObjectsInput) bool {
+					return input.Marker == nil
+				})).Return(&s3.ListObjectsOutput{
+					Contents: []types.Object{
+						{Key: aws.String("prefix/file1.txt")},
+						{Key: aws.String("prefix/file2.txt")},
+					},
+					IsTruncated: aws.Bool(true),
+				}, nil)
+				mockS3Client.On("ListObjects", mock.Anything, mock.MatchedBy(func(input *s3.ListObjectsInput) bool {
+					return *input.Marker == "prefix/file2.txt"
+				})).Return(&s3.ListObjectsOutput{
+					Contents: []types.Object{
+						{Key: aws.String("prefix/file3.txt")},
+					},
+					IsTruncated: aws.Bool(false),
+				}, nil)
 
-// 				return &S3{
-// 						client: mockS3Client,
-// 						Bucket: "test-bucket",
-// 					}, S3ListOptions{
-// 						Path: "prefix/",
-// 					}, func() {
-// 						mockS3Client.AssertExpectations(t)
-// 					}
-// 			},
-// 			wantErr: false,
-// 			want:    []string{"prefix/file1.txt", "prefix/file2.txt", "prefix/file3.txt"},
-// 		},
-// 		{
-// 			name: "error when list objects fails",
-// 			setup: func(t *testing.T) (*S3, S3ListOptions, func()) {
-// 				t.Helper()
+				return &S3{
+						client: mockS3Client,
+						Bucket: "test-bucket",
+					}, S3ListOptions{
+						Path: "prefix/",
+					}, func() {
+						mockS3Client.AssertExpectations(t)
+					}
+			},
+			wantErr: false,
+			want:    []string{"prefix/file1.txt", "prefix/file2.txt", "prefix/file3.txt"},
+		},
+		{
+			name: "error when list objects fails",
+			setup: func(t *testing.T) (*S3, S3ListOptions, func()) {
+				t.Helper()
 
-// 				mockS3Client := mocks.NewMockS3APIClient(t)
-// 				mockS3Client.
-// 					On("ListObjects", mock.Anything, mock.Anything).
-// 					Return(&s3.ListObjectsOutput{}, errors.New("list objects failed"))
+				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.
+					On("ListObjects", mock.Anything, mock.Anything).
+					Return(&s3.ListObjectsOutput{}, errors.New("list objects failed"))
 
-// 				return &S3{
-// 						client: mockS3Client,
-// 						Bucket: "test-bucket",
-// 					}, S3ListOptions{
-// 						Path: "prefix/",
-// 					}, func() {
-// 						mockS3Client.AssertExpectations(t)
-// 					}
-// 			},
-// 			wantErr: true,
-// 			want:    nil,
-// 		},
-// 	}
+				return &S3{
+						client: mockS3Client,
+						Bucket: "test-bucket",
+					}, S3ListOptions{
+						Path: "prefix/",
+					}, func() {
+						mockS3Client.AssertExpectations(t)
+					}
+			},
+			wantErr: true,
+			want:    nil,
+		},
+	}
 
-// 	for _, tt := range tests {
-// 		tt := tt
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			t.Parallel()
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-// 			s3, opt, teardown := tt.setup(t)
-// 			defer teardown()
+			s3, opt, teardown := tt.setup(t)
+			defer teardown()
 
-// 			got, err := s3.List(context.Background(), opt)
-// 			if tt.wantErr {
-// 				assert.Error(t, err)
+			got, err := s3.List(context.Background(), opt)
+			if tt.wantErr {
+				assert.Error(t, err)
 
-// 				return
-// 			}
+				return
+			}
 
-// 			assert.NoError(t, err)
-// 			assert.ElementsMatch(t, tt.want, got)
-// 		})
-// 	}
-// }
+			assert.NoError(t, err)
+			assert.ElementsMatch(t, tt.want, got)
+		})
+	}
+}

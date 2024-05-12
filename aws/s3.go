@@ -361,26 +361,15 @@ func (u *S3) Delete(ctx context.Context, opt S3DeleteOptions) error {
 
 // List retrieves a list of object keys in the S3 bucket under the specified path.
 func (u *S3) List(ctx context.Context, opt S3ListOptions) ([]string, error) {
-	remote := make([]string, 0)
+	var remote []string
 
-	resp, err := u.client.ListObjects(ctx, &s3.ListObjectsInput{
+	input := &s3.ListObjectsInput{
 		Bucket: aws.String(u.Bucket),
 		Prefix: aws.String(opt.Path),
-	})
-	if err != nil {
-		return remote, err
 	}
 
-	for _, item := range resp.Contents {
-		remote = append(remote, *item.Key)
-	}
-
-	for *resp.IsTruncated {
-		resp, err = u.client.ListObjects(ctx, &s3.ListObjectsInput{
-			Bucket: aws.String(u.Bucket),
-			Prefix: aws.String(opt.Path),
-			Marker: aws.String(remote[len(remote)-1]),
-		})
+	for {
+		resp, err := u.client.ListObjects(ctx, input)
 		if err != nil {
 			return remote, err
 		}
@@ -388,6 +377,12 @@ func (u *S3) List(ctx context.Context, opt S3ListOptions) ([]string, error) {
 		for _, item := range resp.Contents {
 			remote = append(remote, *item.Key)
 		}
+
+		if !*resp.IsTruncated {
+			break
+		}
+
+		input.Marker = aws.String(remote[len(remote)-1])
 	}
 
 	return remote, nil
