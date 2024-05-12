@@ -211,7 +211,7 @@ func Flags(settings *Settings, category string) []cli.Flag {
 		&cli.IntFlag{
 			Name:  "max-concurrency",
 			Usage: "customize number concurrent files to process",
-			//nolint:gomnd
+			//nolint:mnd
 			Value:       100,
 			EnvVars:     []string{"PLUGIN_MAX_CONCURRENCY"},
 			Destination: &settings.MaxConcurrency,
