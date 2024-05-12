@@ -15,12 +15,12 @@ type Cloudfront struct {
 	Distribution string
 }
 
-type CloudfrontInvalidateOpt struct {
+type CloudfrontInvalidateOptions struct {
 	Path string
 }
 
 // Invalidate invalidates the specified path in the CloudFront distribution.
-func (c *Cloudfront) Invalidate(ctx context.Context, opt CloudfrontInvalidateOpt) error {
+func (c *Cloudfront) Invalidate(ctx context.Context, opt CloudfrontInvalidateOptions) error {
 	log.Debug().Msgf("invalidating '%s'", opt.Path)
 
 	_, err := c.client.CreateInvalidation(ctx, &cloudfront.CreateInvalidationInput{

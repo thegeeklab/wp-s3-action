@@ -16,12 +16,12 @@ func TestCloudfront_Invalidate(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		setup   func(t *testing.T) (*Cloudfront, CloudfrontInvalidateOpt, func())
+		setup   func(t *testing.T) (*Cloudfront, CloudfrontInvalidateOptions, func())
 		wantErr bool
 	}{
 		{
 			name: "invalidate path successfully",
-			setup: func(t *testing.T) (*Cloudfront, CloudfrontInvalidateOpt, func()) {
+			setup: func(t *testing.T) (*Cloudfront, CloudfrontInvalidateOptions, func()) {
 				t.Helper()
 
 				mockClient := mocks.NewMockCloudfrontAPIClient(t)
@@ -32,7 +32,7 @@ func TestCloudfront_Invalidate(t *testing.T) {
 				return &Cloudfront{
 						client:       mockClient,
 						Distribution: "test-distribution",
-					}, CloudfrontInvalidateOpt{
+					}, CloudfrontInvalidateOptions{
 						Path: "/path/to/invalidate",
 					}, func() {
 						mockClient.AssertExpectations(t)
@@ -42,7 +42,7 @@ func TestCloudfront_Invalidate(t *testing.T) {
 		},
 		{
 			name: "error when create invalidation fails",
-			setup: func(t *testing.T) (*Cloudfront, CloudfrontInvalidateOpt, func()) {
+			setup: func(t *testing.T) (*Cloudfront, CloudfrontInvalidateOptions, func()) {
 				t.Helper()
 
 				mockClient := mocks.NewMockCloudfrontAPIClient(t)
@@ -53,7 +53,7 @@ func TestCloudfront_Invalidate(t *testing.T) {
 				return &Cloudfront{
 						client:       mockClient,
 						Distribution: "test-distribution",
-					}, CloudfrontInvalidateOpt{
+					}, CloudfrontInvalidateOptions{
 						Path: "/path/to/invalidate",
 					}, func() {
 						mockClient.AssertExpectations(t)

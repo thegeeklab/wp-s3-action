@@ -207,7 +207,7 @@ func (p *Plugin) runJobs(ctx context.Context, client *aws.Client) error {
 	}
 
 	if invalidateJob != nil {
-		opt := aws.CloudfrontInvalidateOpt{
+		opt := aws.CloudfrontInvalidateOptions{
 			Path: invalidateJob.remote,
 		}
 
