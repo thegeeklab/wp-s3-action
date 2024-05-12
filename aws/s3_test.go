@@ -15,6 +15,12 @@ import (
 	"github.com/thegeeklab/wp-s3-action/aws/mocks"
 )
 
+var (
+	ErrPutObject    = errors.New("put object failed")
+	ErrDeleteObject = errors.New("delete object failed")
+	ErrListObjects  = errors.New("list objects failed")
+)
+
 func createTempFile(t *testing.T, name string) string {
 	t.Helper()
 
@@ -314,7 +320,7 @@ func TestS3_Redirect(t *testing.T) {
 				mockS3Client := mocks.NewMockS3APIClient(t)
 				mockS3Client.
 					On("PutObject", mock.Anything, mock.Anything).
-					Return(&s3.PutObjectOutput{}, errors.New("put object failed"))
+					Return(&s3.PutObjectOutput{}, ErrPutObject)
 
 				return &S3{
 						client: mockS3Client,
@@ -404,7 +410,7 @@ func TestS3_Delete(t *testing.T) {
 				mockS3Client := mocks.NewMockS3APIClient(t)
 				mockS3Client.
 					On("DeleteObject", mock.Anything, mock.Anything).
-					Return(&s3.DeleteObjectOutput{}, errors.New("delete object failed"))
+					Return(&s3.DeleteObjectOutput{}, ErrDeleteObject)
 
 				return &S3{
 						client: mockS3Client,
@@ -518,7 +524,7 @@ func TestS3_List(t *testing.T) {
 				mockS3Client := mocks.NewMockS3APIClient(t)
 				mockS3Client.
 					On("ListObjects", mock.Anything, mock.Anything).
-					Return(&s3.ListObjectsOutput{}, errors.New("list objects failed"))
+					Return(&s3.ListObjectsOutput{}, ErrListObjects)
 
 				return &S3{
 						client: mockS3Client,

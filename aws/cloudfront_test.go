@@ -11,6 +11,8 @@ import (
 	"github.com/thegeeklab/wp-s3-action/aws/mocks"
 )
 
+var ErrCreateInvalidation = errors.New("create invalidation failed")
+
 func TestCloudfront_Invalidate(t *testing.T) {
 	t.Parallel()
 
@@ -48,7 +50,7 @@ func TestCloudfront_Invalidate(t *testing.T) {
 				mockClient := mocks.NewMockCloudfrontAPIClient(t)
 				mockClient.
 					On("CreateInvalidation", mock.Anything, mock.Anything).
-					Return(&cloudfront.CreateInvalidationOutput{}, errors.New("create invalidation failed"))
+					Return(&cloudfront.CreateInvalidationOutput{}, ErrCreateInvalidation)
 
 				return &Cloudfront{
 						client:       mockClient,
