@@ -35,7 +35,6 @@ type Settings struct {
 	CloudFrontDistribution string
 	DryRun                 bool
 	PathStyle              bool
-	Client                 AWS
 	Jobs                   []Job
 	MaxConcurrency         int
 }
