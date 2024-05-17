@@ -3,8 +3,8 @@ package plugin
 import (
 	"fmt"
 
-	wp "github.com/thegeeklab/wp-plugin-go/v2/plugin"
-	"github.com/thegeeklab/wp-plugin-go/v2/types"
+	wp "github.com/thegeeklab/wp-plugin-go/v3/plugin"
+	"github.com/thegeeklab/wp-plugin-go/v3/types"
 	"github.com/urfave/cli/v2"
 )
 
