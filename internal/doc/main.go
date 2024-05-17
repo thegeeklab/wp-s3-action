@@ -10,8 +10,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/thegeeklab/wp-plugin-go/v2/docs"
-	"github.com/thegeeklab/wp-plugin-go/v2/template"
+	plugin_docs "github.com/thegeeklab/wp-plugin-go/v3/docs"
+	plugin_template "github.com/thegeeklab/wp-plugin-go/v3/template"
 	"github.com/thegeeklab/wp-s3-action/plugin"
 )
 
@@ -23,7 +23,7 @@ func main() {
 
 	p := plugin.New(nil)
 
-	out, err := template.Render(context.Background(), client, tmpl, docs.GetTemplateData(p.App))
+	out, err := plugin_template.Render(context.Background(), client, tmpl, plugin_docs.GetTemplateData(p.App))
 	if err != nil {
 		panic(err)
 	}
