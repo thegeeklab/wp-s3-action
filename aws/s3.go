@@ -71,8 +71,8 @@ func (u *S3) Upload(ctx context.Context, opt S3UploadOptions) error {
 		Key:    &opt.RemoteObjectKey,
 	})
 	if err != nil {
-		var noSuchKeyError *types.NoSuchKey
-		if !errors.As(err, &noSuchKeyError) {
+		var notFoundErr *types.NotFound
+		if !errors.As(err, &notFoundErr) {
 			return err
 		}
 
