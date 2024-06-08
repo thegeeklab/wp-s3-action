@@ -68,7 +68,7 @@ func TestS3_Upload(t *testing.T) {
 				t.Helper()
 
 				mockS3Client := mocks.NewMockS3APIClient(t)
-				mockS3Client.On("HeadObject", mock.Anything, mock.Anything).Return(&s3.HeadObjectOutput{}, &types.NoSuchKey{})
+				mockS3Client.On("HeadObject", mock.Anything, mock.Anything).Return(&s3.HeadObjectOutput{}, &types.NotFound{})
 				mockS3Client.On("PutObject", mock.Anything, mock.Anything).Return(&s3.PutObjectOutput{}, nil)
 
 				return &S3{
@@ -227,7 +227,7 @@ func TestS3_Upload(t *testing.T) {
 				t.Helper()
 
 				mockS3Client := mocks.NewMockS3APIClient(t)
-				mockS3Client.On("HeadObject", mock.Anything, mock.Anything).Return(&s3.HeadObjectOutput{}, &types.NoSuchKey{})
+				mockS3Client.On("HeadObject", mock.Anything, mock.Anything).Return(&s3.HeadObjectOutput{}, &types.NotFound{})
 
 				return &S3{
 						client: mockS3Client,

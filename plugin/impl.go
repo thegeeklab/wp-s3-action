@@ -76,7 +76,7 @@ func (p *Plugin) Execute() error {
 	}
 
 	if err := p.runJobs(p.Network.Context, client); err != nil {
-		return fmt.Errorf("error while creating sync job: %w", err)
+		return fmt.Errorf("error while running jobs: %w", err)
 	}
 
 	return nil
