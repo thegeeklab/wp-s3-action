@@ -5,6 +5,7 @@ import (
 
 	plugin_base "github.com/thegeeklab/wp-plugin-go/v4/plugin"
 	plugin_types "github.com/thegeeklab/wp-plugin-go/v4/types"
+	"github.com/thegeeklab/wp-s3-action/aws"
 	"github.com/urfave/cli/v2"
 )
 
@@ -35,6 +36,7 @@ type Settings struct {
 	CloudFrontDistribution string
 	DryRun                 bool
 	PathStyle              bool
+	ChecksumCalculation    aws.ChecksumMode
 	Jobs                   []Job
 	MaxConcurrency         int
 }
@@ -82,6 +84,8 @@ func New(e plugin_base.ExecuteFunc, build ...string) *Plugin {
 
 // Flags returns a slice of CLI flags for the plugin.
 func Flags(settings *Settings, category string) []cli.Flag {
+	defaultChecksumMode := aws.ChecksumRequired
+
 	return []cli.Flag{
 		&cli.StringFlag{
 			Name:        "endpoint",
@@ -215,6 +219,14 @@ func Flags(settings *Settings, category string) []cli.Flag {
 			Value:       100,
 			EnvVars:     []string{"PLUGIN_MAX_CONCURRENCY"},
 			Destination: &settings.MaxConcurrency,
+			Category:    category,
+		},
+		&cli.GenericFlag{
+			Name:        "checksum-calculation",
+			Usage:       fmt.Sprintf("checksum calculation mode (%s or %s)", aws.ChecksumSupported, aws.ChecksumRequired),
+			Value:       &defaultChecksumMode,
+			EnvVars:     []string{"PLUGIN_CHECKSUM_CALCULATION"},
+			Destination: &settings.ChecksumCalculation,
 			Category:    category,
 		},
 	}

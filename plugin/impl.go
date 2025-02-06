@@ -53,6 +53,7 @@ func (p *Plugin) Execute() error {
 		p.Settings.AccessKey,
 		p.Settings.SecretKey,
 		p.Settings.PathStyle,
+		p.Settings.ChecksumCalculation,
 	)
 	if err != nil {
 		return fmt.Errorf("error while creating AWS client: %w", err)

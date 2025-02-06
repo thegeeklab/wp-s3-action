@@ -17,7 +17,17 @@ type Client struct {
 }
 
 // NewClient creates a new S3 client with the provided configuration.
-func NewClient(ctx context.Context, url, region, accessKey, secretKey string, pathStyle bool) (*Client, error) {
+func NewClient(
+	ctx context.Context,
+	url, region, accessKey, secretKey string,
+	pathStyle bool,
+	cm ChecksumMode,
+) (*Client, error) {
+	checksumModeMap := map[ChecksumMode]aws.RequestChecksumCalculation{
+		ChecksumSupported: aws.RequestChecksumCalculationWhenSupported,
+		ChecksumRequired:  aws.RequestChecksumCalculationWhenRequired,
+	}
+
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(region))
 	if err != nil {
 		return nil, fmt.Errorf("error while loading AWS config: %w", err)
@@ -34,6 +44,7 @@ func NewClient(ctx context.Context, url, region, accessKey, secretKey string, pa
 
 	c := s3.NewFromConfig(cfg, func(o *s3.Options) {
 		o.UsePathStyle = pathStyle
+		o.RequestChecksumCalculation = checksumModeMap[cm]
 	})
 	cf := cloudfront.NewFromConfig(cfg)
 
