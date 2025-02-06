@@ -121,3 +121,11 @@ properties:
     type: string
     defaultValue: "/"
     required: false
+
+  - name: checksum_calculation
+    description: |
+      Checksum calculation mode. Supported values are `required` and `supported`.
+      For third-party S3 implementations, `requied` must most likely be used.
+    type: string
+    defaultValue: "required"
+    required: false
