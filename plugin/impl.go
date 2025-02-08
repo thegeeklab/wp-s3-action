@@ -12,7 +12,10 @@ import (
 	"github.com/thegeeklab/wp-s3-action/aws"
 )
 
-var ErrTypeAssertionFailed = errors.New("type assertion failed")
+var (
+	ErrTypeAssertionFailed  = errors.New("type assertion failed")
+	ErrEmptySourceDirectory = errors.New("source directory is empty")
+)
 
 // Execute provides the implementation of the plugin.
 //
@@ -88,6 +91,17 @@ func (p *Plugin) createSyncJobs(ctx context.Context, client *aws.Client) error {
 	if err != nil {
 		return err
 	}
+
+	entries, err := os.ReadDir(p.Settings.Source)
+	if err != nil {
+		return fmt.Errorf("failed to read source directory: %w", err)
+	}
+
+	if len(entries) == 0 && !p.Settings.AllowEmptySource {
+		return fmt.Errorf("%w: %s", ErrEmptySourceDirectory, p.Settings.Source)
+	}
+
+	log.Warn().Msgf("%s: %s", ErrEmptySourceDirectory, p.Settings.Source)
 
 	local := make([]string, 0)
 

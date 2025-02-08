@@ -36,6 +36,7 @@ type Settings struct {
 	CloudFrontDistribution string
 	DryRun                 bool
 	PathStyle              bool
+	AllowEmptySource       bool
 	ChecksumCalculation    aws.ChecksumMode
 	Jobs                   []Job
 	MaxConcurrency         int
@@ -227,6 +228,13 @@ func Flags(settings *Settings, category string) []cli.Flag {
 			Value:       &defaultChecksumMode,
 			EnvVars:     []string{"PLUGIN_CHECKSUM_CALCULATION"},
 			Destination: &settings.ChecksumCalculation,
+			Category:    category,
+		},
+		&cli.BoolFlag{
+			Name:        "allow-empty-source",
+			Usage:       "allow empty source directory",
+			EnvVars:     []string{"PLUGIN_ALLOW_EMPTY_SOURCE"},
+			Destination: &settings.AllowEmptySource,
 			Category:    category,
 		},
 	}
