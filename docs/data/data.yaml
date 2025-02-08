@@ -125,7 +125,15 @@ properties:
   - name: checksum_calculation
     description: |
       Checksum calculation mode. Supported values are `required` and `supported`.
-      For third-party S3 implementations, `requied` must most likely be used.
+      For third-party S3 implementations, `required` must most likely be used.
     type: string
     defaultValue: "required"
+    required: false
+
+  - name: allow_empty_source
+    description: |
+      Allow empty source directory. By default this setting will prevent deleting
+      all files from the target if `delete: true` is set and the source directory is empty.
+    type: bool
+    defaultValue: false
     required: false

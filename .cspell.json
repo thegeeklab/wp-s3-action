@@ -1,0 +1,47 @@
+{
+  "version": "0.2",
+  "language": "en",
+  "dictionaries": ["en_us", "go"],
+  "words": [
+    "thegeeklab",
+    "kaussow",
+    "Containerfile",
+    "multiarch",
+    "propertylist",
+    "Msgf",
+    "tmpl",
+    "devel"
+  ],
+  "ignorePaths": [
+    ".woodpecker",
+    "*_test.go",
+    ".cspell.json",
+    ".git/**/*",
+    ".gitignore",
+    ".golangci.yaml",
+    ".golangci.yml",
+    ".mockery.yaml",
+    ".mockery.yml",
+    ".vscode",
+    "Makefile",
+    "go.mod",
+    // generated
+    "go.sum",
+    "renovate.json"
+  ],
+  "ignoreRegExpList": [
+    // ignore mulltiline imports
+    "import\\s*\\((.|[\r\n])*?\\)",
+    // ignore single line imports
+    "import\\s*.*\".*?\"",
+    // ignore go generate directive
+    "//\\s*go:generate.*",
+    // ignore nolint directive
+    "//\\s*nolint:.*",
+    // ignore docker image names
+    "\\s*docker\\.io/.*",
+    // ignore colors
+    "color: .*"
+  ],
+  "enableFiletypes": ["dockercompose"]
+}

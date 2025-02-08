@@ -38,4 +38,5 @@ steps:
       - event: [tag]
 
 depends_on:
+  - static
   - test
