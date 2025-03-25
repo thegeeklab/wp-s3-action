@@ -1,7 +1,6 @@
 package aws
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -72,7 +71,7 @@ func TestCloudfront_Invalidate(t *testing.T) {
 			cf, opt, teardown := tt.setup(t)
 			defer teardown()
 
-			err := cf.Invalidate(context.Background(), opt)
+			err := cf.Invalidate(t.Context(), opt)
 			if tt.wantErr {
 				assert.Error(t, err)
 

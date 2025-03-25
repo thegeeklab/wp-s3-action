@@ -244,6 +244,7 @@ func (u *S3) shouldCopyObject(
 		if grantee.URI != nil {
 			switch *grantee.URI {
 			case "http://acs.amazonaws.com/groups/global/AllUsers":
+				//nolint:staticcheck
 				if g.Permission == "READ" {
 					previousACL = "public-read"
 				} else if g.Permission == "WRITE" {

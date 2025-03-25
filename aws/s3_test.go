@@ -1,7 +1,6 @@
 package aws
 
 import (
-	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -251,7 +250,7 @@ func TestS3_Upload(t *testing.T) {
 			s3, opt, teardown := tt.setup(t)
 			defer teardown()
 
-			err := s3.Upload(context.Background(), opt)
+			err := s3.Upload(t.Context(), opt)
 			if tt.wantErr {
 				assert.Error(t, err)
 
@@ -342,7 +341,7 @@ func TestS3_Redirect(t *testing.T) {
 			s3, opt, teardown := tt.setup(t)
 			defer teardown()
 
-			err := s3.Redirect(context.Background(), opt)
+			err := s3.Redirect(t.Context(), opt)
 			if tt.wantErr {
 				assert.Error(t, err)
 
@@ -430,7 +429,7 @@ func TestS3_Delete(t *testing.T) {
 			s3, opt, teardown := tt.setup(t)
 			defer teardown()
 
-			err := s3.Delete(context.Background(), opt)
+			err := s3.Delete(t.Context(), opt)
 			if tt.wantErr {
 				assert.Error(t, err)
 
@@ -544,7 +543,7 @@ func TestS3_List(t *testing.T) {
 			s3, opt, teardown := tt.setup(t)
 			defer teardown()
 
-			got, err := s3.List(context.Background(), opt)
+			got, err := s3.List(t.Context(), opt)
 			if tt.wantErr {
 				assert.Error(t, err)
 
