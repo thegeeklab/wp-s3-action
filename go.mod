@@ -10,7 +10,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.78.2
 	github.com/rs/zerolog v1.34.0
 	github.com/stretchr/testify v1.10.0
-	github.com/thegeeklab/wp-plugin-go/v4 v4.1.2
+	github.com/thegeeklab/wp-plugin-go/v6 v6.0.0
 	github.com/urfave/cli/v2 v2.27.6
 )
 
