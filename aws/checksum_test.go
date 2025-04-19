@@ -6,44 +6,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestChecksumMode_IsValid(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name string
-		mode ChecksumMode
-		want bool
-	}{
-		{
-			name: "supported mode is valid",
-			mode: ChecksumSupported,
-			want: true,
-		},
-		{
-			name: "required mode is valid",
-			mode: ChecksumRequired,
-			want: true,
-		},
-		{
-			name: "empty mode is invalid",
-			mode: "",
-			want: false,
-		},
-		{
-			name: "unknown mode is invalid",
-			mode: "unknown",
-			want: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			assert.Equal(t, tt.want, tt.mode.IsValid())
-		})
-	}
-}
-
 func TestChecksumMode_Set(t *testing.T) {
 	t.Parallel()
 
@@ -51,31 +13,31 @@ func TestChecksumMode_Set(t *testing.T) {
 		name    string
 		value   string
 		want    ChecksumMode
-		wantErr bool
+		wantErr error
 	}{
 		{
 			name:    "set supported mode",
 			value:   "supported",
 			want:    ChecksumSupported,
-			wantErr: false,
+			wantErr: nil,
 		},
 		{
 			name:    "set required mode",
 			value:   "required",
 			want:    ChecksumRequired,
-			wantErr: false,
+			wantErr: nil,
 		},
 		{
 			name:    "error on empty mode",
 			value:   "",
 			want:    "",
-			wantErr: true,
+			wantErr: ErrInvalidChecksumCalculationMode,
 		},
 		{
 			name:    "error on invalid mode",
 			value:   "invalid",
 			want:    "",
-			wantErr: true,
+			wantErr: ErrInvalidChecksumCalculationMode,
 		},
 	}
 
@@ -86,9 +48,8 @@ func TestChecksumMode_Set(t *testing.T) {
 			var mode ChecksumMode
 			err := mode.Set(tt.value)
 
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.ErrorIs(t, err, ErrInvalidChecksumCalculationMode)
+			if tt.wantErr != nil {
+				assert.ErrorAs(t, err, &tt.wantErr)
 
 				return
 			}

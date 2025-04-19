@@ -3,8 +3,8 @@ package plugin
 import (
 	"fmt"
 
-	plugin_base "github.com/thegeeklab/wp-plugin-go/v4/plugin"
-	plugin_types "github.com/thegeeklab/wp-plugin-go/v4/types"
+	plugin_cli "github.com/thegeeklab/wp-plugin-go/v6/cli"
+	plugin_base "github.com/thegeeklab/wp-plugin-go/v6/plugin"
 	"github.com/thegeeklab/wp-s3-action/aws"
 	"github.com/urfave/cli/v3"
 )
@@ -37,7 +37,7 @@ type Settings struct {
 	DryRun                 bool
 	PathStyle              bool
 	AllowEmptySource       bool
-	ChecksumCalculation    aws.ChecksumMode
+	ChecksumCalculation    string
 	Jobs                   []Job
 	MaxConcurrency         int
 }
@@ -85,20 +85,19 @@ func New(e plugin_base.ExecuteFunc, build ...string) *Plugin {
 
 // Flags returns a slice of CLI flags for the plugin.
 func Flags(settings *Settings, category string) []cli.Flag {
-	defaultChecksumMode := aws.ChecksumRequired
-
+	//nolint:mnd
 	return []cli.Flag{
 		&cli.StringFlag{
 			Name:        "endpoint",
 			Usage:       "endpoint for the s3 connection",
-			EnvVars:     []string{"PLUGIN_ENDPOINT", "S3_ENDPOINT"},
+			Sources:     cli.EnvVars("PLUGIN_ENDPOINT", "S3_ENDPOINT"),
 			Destination: &settings.Endpoint,
 			Category:    category,
 		},
 		&cli.StringFlag{
 			Name:        "access-key",
 			Usage:       "s3 access key",
-			EnvVars:     []string{"PLUGIN_ACCESS_KEY", "S3_ACCESS_KEY"},
+			Sources:     cli.EnvVars("PLUGIN_ACCESS_KEY", "S3_ACCESS_KEY"),
 			Destination: &settings.AccessKey,
 			Required:    true,
 			Category:    category,
@@ -106,7 +105,7 @@ func Flags(settings *Settings, category string) []cli.Flag {
 		&cli.StringFlag{
 			Name:        "secret-key",
 			Usage:       "s3 secret key",
-			EnvVars:     []string{"PLUGIN_SECRET_KEY", "S3_SECRET_KEY"},
+			Sources:     cli.EnvVars("PLUGIN_SECRET_KEY", "S3_SECRET_KEY"),
 			Destination: &settings.SecretKey,
 			Required:    true,
 			Category:    category,
@@ -114,14 +113,14 @@ func Flags(settings *Settings, category string) []cli.Flag {
 		&cli.BoolFlag{
 			Name:        "path-style",
 			Usage:       "enable path style for bucket paths",
-			EnvVars:     []string{"PLUGIN_PATH_STYLE"},
+			Sources:     cli.EnvVars("PLUGIN_PATH_STYLE"),
 			Destination: &settings.PathStyle,
 			Category:    category,
 		},
 		&cli.StringFlag{
 			Name:        "bucket",
 			Usage:       "name of the bucket",
-			EnvVars:     []string{"PLUGIN_BUCKET"},
+			Sources:     cli.EnvVars("PLUGIN_BUCKET"),
 			Destination: &settings.Bucket,
 			Required:    true,
 			Category:    category,
@@ -130,7 +129,7 @@ func Flags(settings *Settings, category string) []cli.Flag {
 			Name:        "region",
 			Usage:       "s3 region",
 			Value:       "us-east-1",
-			EnvVars:     []string{"PLUGIN_REGION"},
+			Sources:     cli.EnvVars("PLUGIN_REGION"),
 			Destination: &settings.Region,
 			Category:    category,
 		},
@@ -138,7 +137,7 @@ func Flags(settings *Settings, category string) []cli.Flag {
 			Name:        "source",
 			Usage:       "upload source path",
 			Value:       ".",
-			EnvVars:     []string{"PLUGIN_SOURCE"},
+			Sources:     cli.EnvVars("PLUGIN_SOURCE"),
 			Destination: &settings.Source,
 			Category:    category,
 		},
@@ -146,94 +145,98 @@ func Flags(settings *Settings, category string) []cli.Flag {
 			Name:        "target",
 			Usage:       "upload target path",
 			Value:       "/",
-			EnvVars:     []string{"PLUGIN_TARGET"},
+			Sources:     cli.EnvVars("PLUGIN_TARGET"),
 			Destination: &settings.Target,
 			Category:    category,
 		},
 		&cli.BoolFlag{
 			Name:        "delete",
 			Usage:       "delete locally removed files from the target",
-			EnvVars:     []string{"PLUGIN_DELETE"},
+			Sources:     cli.EnvVars("PLUGIN_DELETE"),
 			Destination: &settings.Delete,
 			Category:    category,
 		},
-		&cli.GenericFlag{
-			Name:     "acl",
-			Usage:    "access control list",
-			EnvVars:  []string{"PLUGIN_ACL"},
-			Value:    &plugin_types.StringMapFlag{},
-			Category: category,
+		&plugin_cli.StringMapFlag{
+			Name:        "acl",
+			Usage:       "access control list",
+			Sources:     cli.EnvVars("PLUGIN_ACL"),
+			Destination: &settings.ACL,
+			Category:    category,
 		},
-		&cli.GenericFlag{
-			Name:     "content-type",
-			Usage:    "content-type settings for uploads",
-			EnvVars:  []string{"PLUGIN_CONTENT_TYPE"},
-			Value:    &plugin_types.StringMapFlag{},
-			Category: category,
+		&plugin_cli.StringMapFlag{
+			Name:        "content-type",
+			Usage:       "content-type settings for uploads",
+			Sources:     cli.EnvVars("PLUGIN_CONTENT_TYPE"),
+			Destination: &settings.ContentType,
+			Category:    category,
 		},
-		&cli.GenericFlag{
-			Name:     "content-encoding",
-			Usage:    "content-encoding settings for uploads",
-			EnvVars:  []string{"PLUGIN_CONTENT_ENCODING"},
-			Value:    &plugin_types.StringMapFlag{},
-			Category: category,
+		&plugin_cli.StringMapFlag{
+			Name:        "content-encoding",
+			Usage:       "content-encoding settings for uploads",
+			Sources:     cli.EnvVars("PLUGIN_CONTENT_ENCODING"),
+			Destination: &settings.ContentEncoding,
+			Category:    category,
 		},
-		&cli.GenericFlag{
-			Name:     "cache-control",
-			Usage:    "cache-control settings for uploads",
-			EnvVars:  []string{"PLUGIN_CACHE_CONTROL"},
-			Value:    &plugin_types.StringMapFlag{},
-			Category: category,
+		&plugin_cli.StringMapFlag{
+			Name:        "cache-control",
+			Usage:       "cache-control settings for uploads",
+			Sources:     cli.EnvVars("PLUGIN_CACHE_CONTROL"),
+			Destination: &settings.CacheControl,
+			Category:    category,
 		},
-		&cli.GenericFlag{
-			Name:     "metadata",
-			Usage:    "additional metadata for uploads",
-			EnvVars:  []string{"PLUGIN_METADATA"},
-			Value:    &plugin_types.DeepStringMapFlag{},
-			Category: category,
+		&plugin_cli.DeepStringMapFlag{
+			Name:        "metadata",
+			Usage:       "additional metadata for uploads",
+			Sources:     cli.EnvVars("PLUGIN_METADATA"),
+			Destination: &settings.Metadata,
+			Category:    category,
 		},
-		&cli.GenericFlag{
-			Name:     "redirects",
-			Usage:    "redirects to create",
-			EnvVars:  []string{"PLUGIN_REDIRECTS"},
-			Value:    &plugin_types.MapFlag{},
-			Category: category,
+		&plugin_cli.StringMapFlag{
+			Name:        "redirects",
+			Usage:       "redirects to create",
+			Sources:     cli.EnvVars("PLUGIN_REDIRECTS"),
+			Destination: &settings.Redirects,
+			Category:    category,
 		},
 		&cli.StringFlag{
 			Name:        "cloudfront-distribution",
 			Usage:       "ID of cloudfront distribution to invalidate",
-			EnvVars:     []string{"PLUGIN_CLOUDFRONT_DISTRIBUTION"},
+			Sources:     cli.EnvVars("PLUGIN_CLOUDFRONT_DISTRIBUTION"),
 			Destination: &settings.CloudFrontDistribution,
 			Category:    category,
 		},
 		&cli.BoolFlag{
 			Name:        "dry-run",
 			Usage:       "dry run disables api calls",
-			EnvVars:     []string{"DRY_RUN", "PLUGIN_DRY_RUN"},
+			Sources:     cli.EnvVars("DRY_RUN", "PLUGIN_DRY_RUN"),
 			Destination: &settings.DryRun,
 			Category:    category,
 		},
-		&cli.IntFlag{
-			Name:  "max-concurrency",
-			Usage: "customize number concurrent files to process",
-			//nolint:mnd
+		&plugin_cli.IntFlag{
+			Name:        "max-concurrency",
+			Usage:       "customize number concurrent files to process",
 			Value:       100,
-			EnvVars:     []string{"PLUGIN_MAX_CONCURRENCY"},
+			Sources:     cli.EnvVars("PLUGIN_MAX_CONCURRENCY"),
 			Destination: &settings.MaxConcurrency,
 			Category:    category,
 		},
-		&cli.GenericFlag{
+		&cli.StringFlag{
 			Name:        "checksum-calculation",
 			Usage:       fmt.Sprintf("checksum calculation mode (%s or %s)", aws.ChecksumSupported, aws.ChecksumRequired),
-			Value:       &defaultChecksumMode,
-			EnvVars:     []string{"PLUGIN_CHECKSUM_CALCULATION"},
+			Sources:     cli.EnvVars("PLUGIN_CHECKSUM_CALCULATION"),
 			Destination: &settings.ChecksumCalculation,
-			Category:    category,
+			Value:       string(aws.ChecksumRequired),
+			Validator: func(s string) error {
+				var mode aws.ChecksumMode
+
+				return mode.Set(s)
+			},
+			Category: category,
 		},
 		&cli.BoolFlag{
 			Name:        "allow-empty-source",
 			Usage:       "allow empty source directory",
-			EnvVars:     []string{"PLUGIN_ALLOW_EMPTY_SOURCE"},
+			Sources:     cli.EnvVars("PLUGIN_ALLOW_EMPTY_SOURCE"),
 			Destination: &settings.AllowEmptySource,
 			Category:    category,
 		},

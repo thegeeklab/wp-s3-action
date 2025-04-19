@@ -21,8 +21,14 @@ func NewClient(
 	ctx context.Context,
 	url, region, accessKey, secretKey string,
 	pathStyle bool,
-	cm ChecksumMode,
+	cm string,
 ) (*Client, error) {
+	var checksumMode ChecksumMode
+
+	if err := checksumMode.Set(cm); err != nil {
+		return nil, fmt.Errorf("error while setting checksum mode: %w", err)
+	}
+
 	checksumModeMap := map[ChecksumMode]aws.RequestChecksumCalculation{
 		ChecksumSupported: aws.RequestChecksumCalculationWhenSupported,
 		ChecksumRequired:  aws.RequestChecksumCalculationWhenRequired,
@@ -44,7 +50,7 @@ func NewClient(
 
 	c := s3.NewFromConfig(cfg, func(o *s3.Options) {
 		o.UsePathStyle = pathStyle
-		o.RequestChecksumCalculation = checksumModeMap[cm]
+		o.RequestChecksumCalculation = checksumModeMap[checksumMode]
 	})
 	cf := cloudfront.NewFromConfig(cfg)
 
