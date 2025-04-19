@@ -14,15 +14,6 @@ const (
 
 var ErrInvalidChecksumCalculationMode = errors.New("invalid checksum calculation mode")
 
-func (cm ChecksumMode) IsValid() bool {
-	switch cm {
-	case ChecksumSupported, ChecksumRequired:
-		return true
-	default:
-		return false
-	}
-}
-
 func (cm *ChecksumMode) Set(value string) error {
 	switch ChecksumMode(value) {
 	case ChecksumSupported, ChecksumRequired:
