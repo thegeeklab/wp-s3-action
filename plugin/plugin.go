@@ -212,7 +212,7 @@ func Flags(settings *Settings, category string) []cli.Flag {
 			Destination: &settings.DryRun,
 			Category:    category,
 		},
-		&plugin_cli.IntFlag{
+		&cli.IntFlag{
 			Name:        "max-concurrency",
 			Usage:       "customize number concurrent files to process",
 			Value:       100,
