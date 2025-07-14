@@ -208,6 +208,7 @@ func (p *Plugin) runJobs(ctx context.Context, client *aws.Client) error {
 			default:
 				err = nil
 			}
+
 			results <- &Result{job, err}
 
 			<-jobChan

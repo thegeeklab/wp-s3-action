@@ -46,8 +46,8 @@ func TestChecksumMode_Set(t *testing.T) {
 			t.Parallel()
 
 			var mode ChecksumMode
-			err := mode.Set(tt.value)
 
+			err := mode.Set(tt.value)
 			if tt.wantErr != nil {
 				assert.ErrorAs(t, err, &tt.wantErr)
 
