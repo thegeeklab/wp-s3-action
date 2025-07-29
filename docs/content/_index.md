@@ -76,7 +76,7 @@ All `map` parameters can be specified as `map` for a subset of files or as `stri
 
 **Sync to Minio S3:**
 
-To use [Minio S3](https://docs.min.io/) its required to set `path_style: true`.
+To use [Minio S3](https://github.com/minio/minio) its required to set `path_style: true`.
 
 ```YAML
 steps:
