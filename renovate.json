@@ -1,4 +1,14 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>thegeeklab/renovate-presets:golang"]
+  "extends": ["github>thegeeklab/renovate-presets:golang"],
+  "packageRules": [
+    {
+      "description": "Automerge patch dependencies",
+      "extends": ["schedule:daily"],
+      "matchDatasources": ["go"],
+      "matchPackageNames": ["/^github.com/aws/aws-sdk-go-v2/.+/"],
+      "matchUpdateTypes": ["patch"],
+      "automerge": true
+    }
+  ]
 }
