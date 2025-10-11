@@ -6,7 +6,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.39.2
 	github.com/aws/aws-sdk-go-v2/config v1.31.12
 	github.com/aws/aws-sdk-go-v2/credentials v1.18.16
-	github.com/aws/aws-sdk-go-v2/service/cloudfront v1.54.4
+	github.com/aws/aws-sdk-go-v2/service/cloudfront v1.55.0
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.88.4
 	github.com/rs/zerolog v1.34.0
 	github.com/stretchr/testify v1.11.1
