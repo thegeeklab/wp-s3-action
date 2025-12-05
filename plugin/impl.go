@@ -97,11 +97,13 @@ func (p *Plugin) createSyncJobs(ctx context.Context, client *aws.Client) error {
 		return fmt.Errorf("failed to read source directory: %w", err)
 	}
 
-	if len(entries) == 0 && !p.Settings.AllowEmptySource {
-		return fmt.Errorf("%w: %s", ErrEmptySourceDirectory, p.Settings.Source)
-	}
+	if len(entries) == 0 {
+		if !p.Settings.AllowEmptySource {
+			return fmt.Errorf("%w: %s", ErrEmptySourceDirectory, p.Settings.Source)
+		}
 
-	log.Warn().Msgf("%s: %s", ErrEmptySourceDirectory, p.Settings.Source)
+		log.Warn().Msgf("%s: %s", ErrEmptySourceDirectory, p.Settings.Source)
+	}
 
 	local := make([]string, 0)
 
