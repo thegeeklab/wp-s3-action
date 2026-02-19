@@ -20,7 +20,7 @@ type Plugin struct {
 // Settings for the Plugin.
 type Settings struct {
 	Endpoint               string
-	AccessKey              string //nolint:gosec
+	AccessKey              string
 	SecretKey              string
 	Bucket                 string
 	Region                 string
