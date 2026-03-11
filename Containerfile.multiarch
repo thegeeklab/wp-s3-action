@@ -17,5 +17,9 @@ LABEL org.opencontainers.image.url="https://github.com/thegeeklab/wp-s3-action"
 LABEL org.opencontainers.image.source="https://github.com/thegeeklab/wp-s3-action"
 LABEL org.opencontainers.image.documentation="https://github.com/thegeeklab/wp-s3-action"
 
+RUN apk upgrade --no-cache zlib && \
+    rm -rf /var/cache/apk/* && \
+    rm -rf /tmp/*
+
 COPY --from=build /src/dist/wp-s3-action /bin/wp-s3-action
 ENTRYPOINT ["/bin/wp-s3-action"]
