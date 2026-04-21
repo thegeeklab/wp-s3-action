@@ -8,7 +8,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.14
 	github.com/aws/aws-sdk-go-v2/service/cloudfront v1.61.0
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.99.0
-	github.com/rs/zerolog v1.35.0
+	github.com/rs/zerolog v1.35.1
 	github.com/stretchr/testify v1.11.1
 	github.com/thegeeklab/wp-plugin-go/v6 v6.0.14
 	github.com/urfave/cli/v3 v3.8.0
