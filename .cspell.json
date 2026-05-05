@@ -14,7 +14,7 @@
   ],
   "ignorePaths": [
     ".woodpecker",
-    "*_test.go",
+    "*_test\.go",
     ".cspell.json",
     ".git/**/*",
     ".gitignore",
