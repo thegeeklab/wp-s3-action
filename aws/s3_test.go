@@ -70,15 +70,19 @@ func TestS3_Upload(t *testing.T) {
 				mockS3Client.On("HeadObject", mock.Anything, mock.Anything).Return(&s3.HeadObjectOutput{}, &types.NotFound{})
 				mockS3Client.On("PutObject", mock.Anything, mock.Anything).Return(&s3.PutObjectOutput{}, nil)
 
-				return &S3{
-						client: mockS3Client,
-						Bucket: "test-bucket",
-					}, S3UploadOptions{
-						LocalFilePath:   createTempFile(t, "file.txt"),
-						RemoteObjectKey: "remote/path/file.txt",
-					}, func() {
-						mockS3Client.AssertExpectations(t)
-					}
+				svc := &S3{
+					client: mockS3Client,
+					Bucket: "test-bucket",
+				}
+
+				uploadOpts := S3UploadOptions{
+					LocalFilePath:   createTempFile(t, "file.txt"),
+					RemoteObjectKey: "remote/path/file.txt",
+				}
+
+				return svc, uploadOpts, func() {
+					mockS3Client.AssertExpectations(t)
+				}
 			},
 			wantErr: false,
 		},
@@ -94,16 +98,20 @@ func TestS3_Upload(t *testing.T) {
 				}, nil)
 				mockS3Client.On("CopyObject", mock.Anything, mock.Anything).Return(&s3.CopyObjectOutput{}, nil)
 
-				return &S3{
-						client: mockS3Client,
-						Bucket: "test-bucket",
-					}, S3UploadOptions{
-						LocalFilePath:   createTempFile(t, "file.txt"),
-						RemoteObjectKey: "remote/path/file.txt",
-						ContentType:     map[string]string{"*.txt": "text/plain"},
-					}, func() {
-						mockS3Client.AssertExpectations(t)
-					}
+				svc := &S3{
+					client: mockS3Client,
+					Bucket: "test-bucket",
+				}
+
+				uploadOpts := S3UploadOptions{
+					LocalFilePath:   createTempFile(t, "file.txt"),
+					RemoteObjectKey: "remote/path/file.txt",
+					ContentType:     map[string]string{"*.txt": "text/plain"},
+				}
+
+				return svc, uploadOpts, func() {
+					mockS3Client.AssertExpectations(t)
+				}
 			},
 			wantErr: false,
 		},
@@ -129,16 +137,20 @@ func TestS3_Upload(t *testing.T) {
 				}, nil)
 				mockS3Client.On("CopyObject", mock.Anything, mock.Anything).Return(&s3.CopyObjectOutput{}, nil)
 
-				return &S3{
-						client: mockS3Client,
-						Bucket: "test-bucket",
-					}, S3UploadOptions{
-						LocalFilePath:   createTempFile(t, "file.txt"),
-						RemoteObjectKey: "remote/path/file.txt",
-						ACL:             map[string]string{"*.txt": "public-read"},
-					}, func() {
-						mockS3Client.AssertExpectations(t)
-					}
+				svc := &S3{
+					client: mockS3Client,
+					Bucket: "test-bucket",
+				}
+
+				uploadOpts := S3UploadOptions{
+					LocalFilePath:   createTempFile(t, "file.txt"),
+					RemoteObjectKey: "remote/path/file.txt",
+					ACL:             map[string]string{"*.txt": "public-read"},
+				}
+
+				return svc, uploadOpts, func() {
+					mockS3Client.AssertExpectations(t)
+				}
 			},
 			wantErr: false,
 		},
@@ -155,16 +167,20 @@ func TestS3_Upload(t *testing.T) {
 				}, nil)
 				mockS3Client.On("CopyObject", mock.Anything, mock.Anything).Return(&s3.CopyObjectOutput{}, nil)
 
-				return &S3{
-						client: mockS3Client,
-						Bucket: "test-bucket",
-					}, S3UploadOptions{
-						LocalFilePath:   createTempFile(t, "file.txt"),
-						RemoteObjectKey: "remote/path/file.txt",
-						CacheControl:    map[string]string{"*.txt": "max-age=3600"},
-					}, func() {
-						mockS3Client.AssertExpectations(t)
-					}
+				svc := &S3{
+					client: mockS3Client,
+					Bucket: "test-bucket",
+				}
+
+				uploadOpts := S3UploadOptions{
+					LocalFilePath:   createTempFile(t, "file.txt"),
+					RemoteObjectKey: "remote/path/file.txt",
+					CacheControl:    map[string]string{"*.txt": "max-age=3600"},
+				}
+
+				return svc, uploadOpts, func() {
+					mockS3Client.AssertExpectations(t)
+				}
 			},
 			wantErr: false,
 		},
@@ -181,16 +197,20 @@ func TestS3_Upload(t *testing.T) {
 				}, nil)
 				mockS3Client.On("CopyObject", mock.Anything, mock.Anything).Return(&s3.CopyObjectOutput{}, nil)
 
-				return &S3{
-						client: mockS3Client,
-						Bucket: "test-bucket",
-					}, S3UploadOptions{
-						LocalFilePath:   createTempFile(t, "file.txt"),
-						RemoteObjectKey: "remote/path/file.txt",
-						ContentEncoding: map[string]string{"*.txt": "gzip"},
-					}, func() {
-						mockS3Client.AssertExpectations(t)
-					}
+				svc := &S3{
+					client: mockS3Client,
+					Bucket: "test-bucket",
+				}
+
+				uploadOpts := S3UploadOptions{
+					LocalFilePath:   createTempFile(t, "file.txt"),
+					RemoteObjectKey: "remote/path/file.txt",
+					ContentEncoding: map[string]string{"*.txt": "gzip"},
+				}
+
+				return svc, uploadOpts, func() {
+					mockS3Client.AssertExpectations(t)
+				}
 			},
 			wantErr: false,
 		},
@@ -207,16 +227,20 @@ func TestS3_Upload(t *testing.T) {
 				}, nil)
 				mockS3Client.On("CopyObject", mock.Anything, mock.Anything).Return(&s3.CopyObjectOutput{}, nil)
 
-				return &S3{
-						client: mockS3Client,
-						Bucket: "test-bucket",
-					}, S3UploadOptions{
-						LocalFilePath:   createTempFile(t, "file.txt"),
-						RemoteObjectKey: "remote/path/file.txt",
-						Metadata:        map[string]map[string]string{"*.txt": {"key": "value"}},
-					}, func() {
-						mockS3Client.AssertExpectations(t)
-					}
+				svc := &S3{
+					client: mockS3Client,
+					Bucket: "test-bucket",
+				}
+
+				uploadOpts := S3UploadOptions{
+					LocalFilePath:   createTempFile(t, "file.txt"),
+					RemoteObjectKey: "remote/path/file.txt",
+					Metadata:        map[string]map[string]string{"*.txt": {"key": "value"}},
+				}
+
+				return svc, uploadOpts, func() {
+					mockS3Client.AssertExpectations(t)
+				}
 			},
 			wantErr: false,
 		},
@@ -228,16 +252,20 @@ func TestS3_Upload(t *testing.T) {
 				mockS3Client := mocks.NewMockS3APIClient(t)
 				mockS3Client.On("HeadObject", mock.Anything, mock.Anything).Return(&s3.HeadObjectOutput{}, &types.NotFound{})
 
-				return &S3{
-						client: mockS3Client,
-						Bucket: "test-bucket",
-						DryRun: true,
-					}, S3UploadOptions{
-						LocalFilePath:   createTempFile(t, "file1.txt"),
-						RemoteObjectKey: "remote/path/file1.txt",
-					}, func() {
-						mockS3Client.AssertExpectations(t)
-					}
+				svc := &S3{
+					client: mockS3Client,
+					Bucket: "test-bucket",
+					DryRun: true,
+				}
+
+				uploadOpts := S3UploadOptions{
+					LocalFilePath:   createTempFile(t, "file1.txt"),
+					RemoteObjectKey: "remote/path/file1.txt",
+				}
+
+				return svc, uploadOpts, func() {
+					mockS3Client.AssertExpectations(t)
+				}
 			},
 			wantErr: false,
 		},
@@ -247,10 +275,10 @@ func TestS3_Upload(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			s3, opt, teardown := tt.setup(t)
+			svc, opt, teardown := tt.setup(t)
 			defer teardown()
 
-			err := s3.Upload(t.Context(), opt)
+			err := svc.Upload(t.Context(), opt)
 			if tt.wantErr {
 				assert.Error(t, err)
 
@@ -278,15 +306,19 @@ func TestS3_Redirect(t *testing.T) {
 				mockS3Client := mocks.NewMockS3APIClient(t)
 				mockS3Client.On("PutObject", mock.Anything, mock.Anything).Return(&s3.PutObjectOutput{}, nil)
 
-				return &S3{
-						client: mockS3Client,
-						Bucket: "test-bucket",
-					}, S3RedirectOptions{
-						Path:     "redirect/path",
-						Location: "https://example.com",
-					}, func() {
-						mockS3Client.AssertExpectations(t)
-					}
+				svc := &S3{
+					client: mockS3Client,
+					Bucket: "test-bucket",
+				}
+
+				redirectOpts := S3RedirectOptions{
+					Path:     "redirect/path",
+					Location: "https://example.com",
+				}
+
+				return svc, redirectOpts, func() {
+					mockS3Client.AssertExpectations(t)
+				}
 			},
 			wantErr: false,
 		},
@@ -297,16 +329,20 @@ func TestS3_Redirect(t *testing.T) {
 
 				mockS3Client := mocks.NewMockS3APIClient(t)
 
-				return &S3{
-						client: mockS3Client,
-						Bucket: "test-bucket",
-						DryRun: true,
-					}, S3RedirectOptions{
-						Path:     "redirect/path",
-						Location: "https://example.com",
-					}, func() {
-						mockS3Client.AssertExpectations(t)
-					}
+				svc := &S3{
+					client: mockS3Client,
+					Bucket: "test-bucket",
+					DryRun: true,
+				}
+
+				redirectOpts := S3RedirectOptions{
+					Path:     "redirect/path",
+					Location: "https://example.com",
+				}
+
+				return svc, redirectOpts, func() {
+					mockS3Client.AssertExpectations(t)
+				}
 			},
 			wantErr: false,
 		},
@@ -320,15 +356,19 @@ func TestS3_Redirect(t *testing.T) {
 					On("PutObject", mock.Anything, mock.Anything).
 					Return(&s3.PutObjectOutput{}, ErrPutObject)
 
-				return &S3{
-						client: mockS3Client,
-						Bucket: "test-bucket",
-					}, S3RedirectOptions{
-						Path:     "redirect/path",
-						Location: "https://example.com",
-					}, func() {
-						mockS3Client.AssertExpectations(t)
-					}
+				svc := &S3{
+					client: mockS3Client,
+					Bucket: "test-bucket",
+				}
+
+				redirectOpts := S3RedirectOptions{
+					Path:     "redirect/path",
+					Location: "https://example.com",
+				}
+
+				return svc, redirectOpts, func() {
+					mockS3Client.AssertExpectations(t)
+				}
 			},
 			wantErr: true,
 		},
@@ -338,10 +378,10 @@ func TestS3_Redirect(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			s3, opt, teardown := tt.setup(t)
+			svc, opt, teardown := tt.setup(t)
 			defer teardown()
 
-			err := s3.Redirect(t.Context(), opt)
+			err := svc.Redirect(t.Context(), opt)
 			if tt.wantErr {
 				assert.Error(t, err)
 
@@ -369,14 +409,18 @@ func TestS3_Delete(t *testing.T) {
 				mockS3Client := mocks.NewMockS3APIClient(t)
 				mockS3Client.On("DeleteObject", mock.Anything, mock.Anything).Return(&s3.DeleteObjectOutput{}, nil)
 
-				return &S3{
-						client: mockS3Client,
-						Bucket: "test-bucket",
-					}, S3DeleteOptions{
-						RemoteObjectKey: "path/to/file.txt",
-					}, func() {
-						mockS3Client.AssertExpectations(t)
-					}
+				svc := &S3{
+					client: mockS3Client,
+					Bucket: "test-bucket",
+				}
+
+				deleteOpts := S3DeleteOptions{
+					RemoteObjectKey: "path/to/file.txt",
+				}
+
+				return svc, deleteOpts, func() {
+					mockS3Client.AssertExpectations(t)
+				}
 			},
 			wantErr: false,
 		},
@@ -387,15 +431,19 @@ func TestS3_Delete(t *testing.T) {
 
 				mockS3Client := mocks.NewMockS3APIClient(t)
 
-				return &S3{
-						client: mockS3Client,
-						Bucket: "test-bucket",
-						DryRun: true,
-					}, S3DeleteOptions{
-						RemoteObjectKey: "path/to/file.txt",
-					}, func() {
-						mockS3Client.AssertExpectations(t)
-					}
+				svc := &S3{
+					client: mockS3Client,
+					Bucket: "test-bucket",
+					DryRun: true,
+				}
+
+				deleteOpts := S3DeleteOptions{
+					RemoteObjectKey: "path/to/file.txt",
+				}
+
+				return svc, deleteOpts, func() {
+					mockS3Client.AssertExpectations(t)
+				}
 			},
 			wantErr: false,
 		},
@@ -409,14 +457,18 @@ func TestS3_Delete(t *testing.T) {
 					On("DeleteObject", mock.Anything, mock.Anything).
 					Return(&s3.DeleteObjectOutput{}, ErrDeleteObject)
 
-				return &S3{
-						client: mockS3Client,
-						Bucket: "test-bucket",
-					}, S3DeleteOptions{
-						RemoteObjectKey: "path/to/file.txt",
-					}, func() {
-						mockS3Client.AssertExpectations(t)
-					}
+				svc := &S3{
+					client: mockS3Client,
+					Bucket: "test-bucket",
+				}
+
+				deleteOpts := S3DeleteOptions{
+					RemoteObjectKey: "path/to/file.txt",
+				}
+
+				return svc, deleteOpts, func() {
+					mockS3Client.AssertExpectations(t)
+				}
 			},
 			wantErr: true,
 		},
@@ -426,10 +478,10 @@ func TestS3_Delete(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			s3, opt, teardown := tt.setup(t)
+			svc, opt, teardown := tt.setup(t)
 			defer teardown()
 
-			err := s3.Delete(t.Context(), opt)
+			err := svc.Delete(t.Context(), opt)
 			if tt.wantErr {
 				assert.Error(t, err)
 
@@ -464,14 +516,18 @@ func TestS3_List(t *testing.T) {
 					IsTruncated: aws.Bool(false),
 				}, nil)
 
-				return &S3{
-						client: mockS3Client,
-						Bucket: "test-bucket",
-					}, S3ListOptions{
-						Path: "prefix/",
-					}, func() {
-						mockS3Client.AssertExpectations(t)
-					}
+				svc := &S3{
+					client: mockS3Client,
+					Bucket: "test-bucket",
+				}
+
+				listOpts := S3ListOptions{
+					Path: "prefix/",
+				}
+
+				return svc, listOpts, func() {
+					mockS3Client.AssertExpectations(t)
+				}
 			},
 			wantErr: false,
 			want:    []string{"prefix/file1.txt", "prefix/file2.txt"},
@@ -500,14 +556,18 @@ func TestS3_List(t *testing.T) {
 					IsTruncated: aws.Bool(false),
 				}, nil)
 
-				return &S3{
-						client: mockS3Client,
-						Bucket: "test-bucket",
-					}, S3ListOptions{
-						Path: "prefix/",
-					}, func() {
-						mockS3Client.AssertExpectations(t)
-					}
+				svc := &S3{
+					client: mockS3Client,
+					Bucket: "test-bucket",
+				}
+
+				listOpts := S3ListOptions{
+					Path: "prefix/",
+				}
+
+				return svc, listOpts, func() {
+					mockS3Client.AssertExpectations(t)
+				}
 			},
 			wantErr: false,
 			want:    []string{"prefix/file1.txt", "prefix/file2.txt", "prefix/file3.txt"},
@@ -522,14 +582,18 @@ func TestS3_List(t *testing.T) {
 					On("ListObjects", mock.Anything, mock.Anything).
 					Return(&s3.ListObjectsOutput{}, ErrListObjects)
 
-				return &S3{
-						client: mockS3Client,
-						Bucket: "test-bucket",
-					}, S3ListOptions{
-						Path: "prefix/",
-					}, func() {
-						mockS3Client.AssertExpectations(t)
-					}
+				svc := &S3{
+					client: mockS3Client,
+					Bucket: "test-bucket",
+				}
+
+				listOpts := S3ListOptions{
+					Path: "prefix/",
+				}
+
+				return svc, listOpts, func() {
+					mockS3Client.AssertExpectations(t)
+				}
 			},
 			wantErr: true,
 			want:    nil,
@@ -540,10 +604,10 @@ func TestS3_List(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			s3, opt, teardown := tt.setup(t)
+			svc, opt, teardown := tt.setup(t)
 			defer teardown()
 
-			got, err := s3.List(t.Context(), opt)
+			got, err := svc.List(t.Context(), opt)
 			if tt.wantErr {
 				assert.Error(t, err)
 
