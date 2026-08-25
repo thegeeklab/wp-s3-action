@@ -30,14 +30,14 @@ func TestCloudfront_Invalidate(t *testing.T) {
 					On("CreateInvalidation", mock.Anything, mock.Anything).
 					Return(&cloudfront.CreateInvalidationOutput{}, nil)
 
-				return &Cloudfront{
-						client:       mockClient,
-						Distribution: "test-distribution",
-					}, CloudfrontInvalidateOptions{
-						Path: "/path/to/invalidate",
-					}, func() {
-						mockClient.AssertExpectations(t)
-					}
+				svc := &Cloudfront{
+					client:       mockClient,
+					Distribution: "test-distribution",
+				}
+
+				return svc, CloudfrontInvalidateOptions{Path: "/path/to/invalidate"}, func() {
+					mockClient.AssertExpectations(t)
+				}
 			},
 			wantErr: false,
 		},
@@ -51,14 +51,14 @@ func TestCloudfront_Invalidate(t *testing.T) {
 					On("CreateInvalidation", mock.Anything, mock.Anything).
 					Return(&cloudfront.CreateInvalidationOutput{}, ErrCreateInvalidation)
 
-				return &Cloudfront{
-						client:       mockClient,
-						Distribution: "test-distribution",
-					}, CloudfrontInvalidateOptions{
-						Path: "/path/to/invalidate",
-					}, func() {
-						mockClient.AssertExpectations(t)
-					}
+				svc := &Cloudfront{
+					client:       mockClient,
+					Distribution: "test-distribution",
+				}
+
+				return svc, CloudfrontInvalidateOptions{Path: "/path/to/invalidate"}, func() {
+					mockClient.AssertExpectations(t)
+				}
 			},
 			wantErr: true,
 		},
@@ -68,10 +68,10 @@ func TestCloudfront_Invalidate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			cf, opt, teardown := tt.setup(t)
+			svc, opt, teardown := tt.setup(t)
 			defer teardown()
 
-			err := cf.Invalidate(t.Context(), opt)
+			err := svc.Invalidate(t.Context(), opt)
 			if tt.wantErr {
 				assert.Error(t, err)
 
