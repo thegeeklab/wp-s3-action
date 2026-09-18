@@ -285,11 +285,6 @@ func TestHandleInvalidateCloudFront(t *testing.T) {
 		wantErr      error
 	}{
 		{
-			name:         "skip when distribution is empty",
-			distribution: "",
-			target:       "blog",
-		},
-		{
 			name:         "dry run skips invalidation",
 			distribution: "E123",
 			target:       "blog",
@@ -323,8 +318,6 @@ func TestHandleInvalidateCloudFront(t *testing.T) {
 
 			switch {
 			case tt.dryRun:
-				mockCf.AssertNotCalled(t, "CreateInvalidation", mock.Anything, mock.Anything)
-			case tt.distribution == "":
 				mockCf.AssertNotCalled(t, "CreateInvalidation", mock.Anything, mock.Anything)
 			case tt.wantErr != nil:
 				mockCf.On("CreateInvalidation", mock.Anything, mock.Anything).

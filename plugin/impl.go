@@ -268,10 +268,6 @@ func (p *Plugin) runActionJobs(client *aws.Client, action S3Action, build func(c
 }
 
 func (p *Plugin) handleInvalidateCloudFront(client *aws.Client) error {
-	if p.Settings.CloudFront.Distribution == "" {
-		return nil
-	}
-
 	if p.Settings.DryRun {
 		log.Debug().Msgf("dry run: skipping cloudfront invalidation of '/%s/*'", p.Settings.Target)
 

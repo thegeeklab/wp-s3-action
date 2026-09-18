@@ -113,7 +113,7 @@ func Flags(settings *Settings, category string) []cli.Flag {
 		&cli.StringFlag{
 			Name:        "access-key",
 			Usage:       "s3 access key",
-			Sources:     cli.EnvVars("PLUGIN_ACCESS_KEY", "S3_ACCESS_KEY"),
+			Sources:     cli.EnvVars("PLUGIN_ACCESS_KEY", "S3_ACCESS_KEY", "AWS_ACCESS_KEY_ID"),
 			Destination: &settings.AccessKey,
 			Required:    true,
 			Category:    category,
@@ -121,7 +121,7 @@ func Flags(settings *Settings, category string) []cli.Flag {
 		&cli.StringFlag{
 			Name:        "secret-key",
 			Usage:       "s3 secret key",
-			Sources:     cli.EnvVars("PLUGIN_SECRET_KEY", "S3_SECRET_KEY"),
+			Sources:     cli.EnvVars("PLUGIN_SECRET_KEY", "S3_SECRET_KEY", "AWS_SECRET_ACCESS_KEY"),
 			Destination: &settings.SecretKey,
 			Required:    true,
 			Category:    category,

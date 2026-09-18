@@ -15,7 +15,7 @@ properties:
       - **redirect:** Creates redirect objects from the `redirects` setting under the `target` path.
         Requires a target server that supports the S3 website redirect feature.
       - **invalidate-cloudfront:** Invalidates the configured CloudFront distribution path.
-        This action is AWS-specific and does not work with S3-compatible endpoints such as Minio.
+        This action is AWS-specific and does not work with S3-compatible endpoints such as Garage.
     type: list
     required: true
 
@@ -48,7 +48,7 @@ properties:
       ID of cloudfront distribution to invalidate.
 
       CloudFront is an AWS service and is not supported by S3-compatible
-      endpoints such as Minio.
+      endpoints such as Garage.
     type: string
     required: false
 
@@ -88,7 +88,7 @@ properties:
   - name: insecure_skip_verify
     description: |
       Skip SSL verification when connecting to the S3 endpoint. Useful for
-      self-hosted S3-compatible services (e.g., Minio) using self-signed
+      self-hosted S3-compatible services (e.g., Garage) using self-signed
       certificates.
     type: bool
     defaultValue: false
