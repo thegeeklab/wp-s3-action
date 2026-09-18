@@ -66,7 +66,7 @@ steps:
       target: /target/location
       redirects:
         old/path: https://example.com/new/path
-      cloudfront_distribution: E2QWRUHAPOMQZL
+      cloudfront_distribution: E1ABCDEFGHIJKL
 ```
 
 #### Full cache configuration
@@ -105,11 +105,51 @@ All `map` parameters can be specified as `map` for a subset of files or as `stri
 - For the `upload_acl` parameter the key must be a glob. Files without a matching rule will default to `private`.
 - For the `upload_content_type` parameter, the key must be a file extension (including the leading dot). To apply a configuration to files without extension, the key can be set to an empty string `""`. For files without a matching rule, the content type is determined automatically.
 - For the `upload_content_encoding` parameter, the key must be a file extension (including the leading dot). To apply a configuration to files without extension, the key can be set to an empty string `""`. For files without a matching rule, no Content Encoding header is set.
-- For the `upload_cache_control` parameter, the key must be a file extension (including the leading dot). If you want to set cache control for files without an extension, set the key to the empty string `""`. For files without a matching rule, no Cache Control header is set.
+- For the `upload_cache_control` parameter, the key must be a glob. For files without a matching rule, no Cache Control header is set.
 
-#### Sync to Minio S3
+#### Cache a Go build
 
-To use [Minio S3](https://github.com/minio/minio) its required to set `path_style: true`.
+The plugin can be used to cache the Go module and build cache between pipeline runs. Store the cache in a workspace directory and restore it before the build, then persist it again afterwards:
+
+```YAML
+steps:
+  - name: restore-cache
+    image: quay.io/thegeeklab/wp-s3-action
+    settings:
+      action:
+        - download
+      access_key: randomstring
+      secret_key: random-secret
+      region: us-east-1
+      bucket: my-cache-bucket
+      source: .cache/go
+      target: cache/go
+
+  - name: build
+    image: docker.io/library/golang:1.27
+    commands:
+      - export GOMODCACHE="$CI_WORKSPACE/.cache/go/mod"
+      - export GOCACHE="$CI_WORKSPACE/.cache/go/build"
+      - go build ./...
+
+  - name: save-cache
+    image: quay.io/thegeeklab/wp-s3-action
+    settings:
+      action:
+        - upload
+      access_key: randomstring
+      secret_key: random-secret
+      region: us-east-1
+      bucket: my-cache-bucket
+      source: .cache/go
+      target: cache/go
+```
+
+The `download` action restores the objects stored under the `cache/go` prefix into the workspace. On the first run the prefix does not exist, so the step is a no-op. After the build, the `upload` action writes the populated cache directory back to the same prefix. Only files whose content changed are uploaded, so saving the cache is cheap. Use separate `target` prefixes to keep multiple caches apart, for example one per Go version or branch.
+
+#### Sync to a self-hosted S3 server
+
+To sync to a self-hosted S3-compatible server, point `endpoint` at the server and enable `path_style`. Path-style addressing works out of the box, while virtual-hosted-style addressing requires additional DNS configuration.
 
 ```YAML
 steps:
@@ -118,7 +158,7 @@ steps:
     settings:
       action:
         - upload
-      endpoint: https://minio.example.com
+      endpoint: https://s3.example.com
       access_key: randomstring
       secret_key: random-secret
       bucket: my-bucket
