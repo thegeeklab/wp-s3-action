@@ -1,12 +1,31 @@
 ---
 properties:
+  - name: action
+    description: |
+      S3 action to execute. Actions are low-level operations that can be combined to
+      compose higher-level workflows such as a full sync. Supported actions: `upload`,
+      `download`, `delete`, `redirect`, `invalidate-cloudfront`.
+
+      - **upload:** Uploads files from the local `source` directory to the S3 bucket `target` path.
+        When combined with the `upload_delete` setting, remote files that no longer exist locally are removed.
+      - **download:** Downloads files from the S3 bucket `target` path to the local `source` directory.
+        Requires an explicit non-empty `target` so the entire bucket cannot be pulled by accident.
+      - **delete:** Deletes all files from the S3 bucket `target` path.
+        Requires an explicit non-empty `target` so the entire bucket cannot be wiped by accident.
+      - **redirect:** Creates redirect objects from the `redirects` setting under the `target` path.
+        Requires a target server that supports the S3 website redirect feature.
+      - **invalidate-cloudfront:** Invalidates the configured CloudFront distribution path.
+        This action is AWS-specific and does not work with S3-compatible endpoints such as Minio.
+    type: list
+    required: true
+
   - name: access_key
     description: |
       S3 access key.
     type: string
     required: true
 
-  - name: acl
+  - name: upload_acl
     description: |
       Access control list.
     type: generic
@@ -18,7 +37,7 @@ properties:
     type: string
     required: true
 
-  - name: cache_control
+  - name: upload_cache_control
     description: |
       Cache-control settings for uploads.
     type: generic
@@ -27,24 +46,35 @@ properties:
   - name: cloudfront_distribution
     description: |
       ID of cloudfront distribution to invalidate.
+
+      CloudFront is an AWS service and is not supported by S3-compatible
+      endpoints such as Minio.
     type: string
     required: false
 
-  - name: content_encoding
+  - name: upload_content_encoding
     description: |
       Content-encoding settings for uploads.
     type: generic
     required: false
 
-  - name: content_type
+  - name: upload_content_type
     description: |
       Content-type settings for uploads.
     type: generic
     required: false
 
-  - name: delete
+  - name: upload_delete
     description: |
-      Delete locally removed files from the target.
+      Delete remote files that are not present in the local source directory during upload.
+    type: bool
+    defaultValue: false
+    required: false
+
+  - name: dry_run
+    description: |
+      Dry run disables API calls. When enabled, the plugin logs the actions it would take
+      without actually uploading, downloading, deleting, or redirecting.
     type: bool
     defaultValue: false
     required: false
@@ -57,7 +87,9 @@ properties:
 
   - name: insecure_skip_verify
     description: |
-      Skip SSL verification.
+      Skip SSL verification when connecting to the S3 endpoint. Useful for
+      self-hosted S3-compatible services (e.g., Minio) using self-signed
+      certificates.
     type: bool
     defaultValue: false
     required: false
@@ -76,7 +108,7 @@ properties:
     defaultValue: 100
     required: false
 
-  - name: metadata
+  - name: upload_metadata
     description: |
       Additional metadata for uploads.
     type: generic
@@ -91,7 +123,13 @@ properties:
 
   - name: redirects
     description: |
-      Redirects to create.
+      Map of source paths to redirect destinations. Each key is created as an S3 object
+      under the configured `target` path with the `x-amz-website-redirect-location` header
+      set to the corresponding value.
+
+      The target server must support the S3 website redirect feature, so check your
+      provider's documentation for static website hosting or website redirect support
+      before using the `redirect` action.
     type: generic
     required: false
 
@@ -110,16 +148,19 @@ properties:
 
   - name: source
     description: |
-      Upload source path.
+      Local working directory. Files are read from here during `upload` and written
+      here during `download`.
     type: string
     defaultValue: "."
     required: false
 
   - name: target
     description: |
-      Upload target path.
+      S3 path prefix for the bucket operations. Used by all actions to scope the
+      S3 key namespace (a leading `/` is stripped). Empty means the bucket root.
+      The `delete` and `download` actions require an explicit non-empty value.
     type: string
-    defaultValue: "/"
+    defaultValue: ""
     required: false
 
   - name: checksum_calculation
@@ -130,10 +171,10 @@ properties:
     defaultValue: "required"
     required: false
 
-  - name: allow_empty_source
+  - name: upload_allow_empty_source
     description: |
       Allow empty source directory. By default this setting will prevent deleting
-      all files from the target if `delete: true` is set and the source directory is empty.
+      all files from the target if `upload_delete: true` is set and the source directory is empty.
     type: bool
     defaultValue: false
     required: false

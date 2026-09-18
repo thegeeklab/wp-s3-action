@@ -19,38 +19,46 @@ type Plugin struct {
 
 // Settings for the Plugin.
 type Settings struct {
-	Endpoint               string
-	AccessKey              string
-	SecretKey              string
-	Bucket                 string
-	Region                 string
-	Source                 string
-	Target                 string
-	Delete                 bool
-	ACL                    map[string]string
-	CacheControl           map[string]string
-	ContentType            map[string]string
-	ContentEncoding        map[string]string
-	Metadata               map[string]map[string]string
-	Redirects              map[string]string
-	CloudFrontDistribution string
-	DryRun                 bool
-	PathStyle              bool
-	AllowEmptySource       bool
-	ChecksumCalculation    string
-	Jobs                   []Job
-	MaxConcurrency         int
+	ActionStrings       []string
+	Action              []S3Action
+	Endpoint            string
+	AccessKey           string
+	SecretKey           string
+	Bucket              string
+	Region              string
+	Source              string
+	Target              string
+	Redirects           map[string]string
+	DryRun              bool
+	PathStyle           bool
+	ChecksumCalculation string
+	MaxConcurrency      int
+
+	Upload     Upload
+	CloudFront CloudFront
 }
+
+type Upload struct {
+	Delete           bool
+	ACL              map[string]string
+	CacheControl     map[string]string
+	ContentType      map[string]string
+	ContentEncoding  map[string]string
+	Metadata         map[string]map[string]string
+	AllowEmptySource bool
+}
+
+type CloudFront struct {
+	Distribution string
+}
+
+type S3Action string
 
 type Job struct {
-	local  string
-	remote string
-	action string
-}
-
-type Result struct {
-	j   Job
-	err error
+	local     string
+	remote    string
+	remoteSet []string
+	action    S3Action
 }
 
 func New(e plugin_base.ExecuteFunc, build ...string) *Plugin {
@@ -87,6 +95,14 @@ func New(e plugin_base.ExecuteFunc, build ...string) *Plugin {
 func Flags(settings *Settings, category string) []cli.Flag {
 	//nolint:mnd
 	return []cli.Flag{
+		&cli.StringSliceFlag{
+			Name:        "action",
+			Usage:       "S3 action to execute",
+			Sources:     cli.EnvVars("PLUGIN_ACTION"),
+			Destination: &settings.ActionStrings,
+			Required:    true,
+			Category:    category,
+		},
 		&cli.StringFlag{
 			Name:        "endpoint",
 			Usage:       "endpoint for the s3 connection",
@@ -143,52 +159,52 @@ func Flags(settings *Settings, category string) []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name:        "target",
-			Usage:       "upload target path",
-			Value:       "/",
+			Usage:       "s3 key prefix used to scope the action (a leading '/' is stripped)",
+			Value:       "",
 			Sources:     cli.EnvVars("PLUGIN_TARGET"),
 			Destination: &settings.Target,
 			Category:    category,
 		},
 		&cli.BoolFlag{
-			Name:        "delete",
+			Name:        "upload.delete",
 			Usage:       "delete locally removed files from the target",
-			Sources:     cli.EnvVars("PLUGIN_DELETE"),
-			Destination: &settings.Delete,
+			Sources:     cli.EnvVars("PLUGIN_UPLOAD_DELETE"),
+			Destination: &settings.Upload.Delete,
 			Category:    category,
 		},
 		&plugin_cli.StringMapFlag{
-			Name:        "acl",
+			Name:        "upload.acl",
 			Usage:       "access control list",
-			Sources:     cli.EnvVars("PLUGIN_ACL"),
-			Destination: &settings.ACL,
+			Sources:     cli.EnvVars("PLUGIN_UPLOAD_ACL"),
+			Destination: &settings.Upload.ACL,
 			Category:    category,
 		},
 		&plugin_cli.StringMapFlag{
-			Name:        "content-type",
+			Name:        "upload.content-type",
 			Usage:       "content-type settings for uploads",
-			Sources:     cli.EnvVars("PLUGIN_CONTENT_TYPE"),
-			Destination: &settings.ContentType,
+			Sources:     cli.EnvVars("PLUGIN_UPLOAD_CONTENT_TYPE"),
+			Destination: &settings.Upload.ContentType,
 			Category:    category,
 		},
 		&plugin_cli.StringMapFlag{
-			Name:        "content-encoding",
+			Name:        "upload.content-encoding",
 			Usage:       "content-encoding settings for uploads",
-			Sources:     cli.EnvVars("PLUGIN_CONTENT_ENCODING"),
-			Destination: &settings.ContentEncoding,
+			Sources:     cli.EnvVars("PLUGIN_UPLOAD_CONTENT_ENCODING"),
+			Destination: &settings.Upload.ContentEncoding,
 			Category:    category,
 		},
 		&plugin_cli.StringMapFlag{
-			Name:        "cache-control",
+			Name:        "upload.cache-control",
 			Usage:       "cache-control settings for uploads",
-			Sources:     cli.EnvVars("PLUGIN_CACHE_CONTROL"),
-			Destination: &settings.CacheControl,
+			Sources:     cli.EnvVars("PLUGIN_UPLOAD_CACHE_CONTROL"),
+			Destination: &settings.Upload.CacheControl,
 			Category:    category,
 		},
 		&plugin_cli.DeepStringMapFlag{
-			Name:        "metadata",
+			Name:        "upload.metadata",
 			Usage:       "additional metadata for uploads",
-			Sources:     cli.EnvVars("PLUGIN_METADATA"),
-			Destination: &settings.Metadata,
+			Sources:     cli.EnvVars("PLUGIN_UPLOAD_METADATA"),
+			Destination: &settings.Upload.Metadata,
 			Category:    category,
 		},
 		&plugin_cli.StringMapFlag{
@@ -199,10 +215,10 @@ func Flags(settings *Settings, category string) []cli.Flag {
 			Category:    category,
 		},
 		&cli.StringFlag{
-			Name:        "cloudfront-distribution",
+			Name:        "cloudfront.distribution",
 			Usage:       "ID of cloudfront distribution to invalidate",
 			Sources:     cli.EnvVars("PLUGIN_CLOUDFRONT_DISTRIBUTION"),
-			Destination: &settings.CloudFrontDistribution,
+			Destination: &settings.CloudFront.Distribution,
 			Category:    category,
 		},
 		&cli.BoolFlag{
@@ -234,10 +250,10 @@ func Flags(settings *Settings, category string) []cli.Flag {
 			Category: category,
 		},
 		&cli.BoolFlag{
-			Name:        "allow-empty-source",
+			Name:        "upload.allow-empty-source",
 			Usage:       "allow empty source directory",
-			Sources:     cli.EnvVars("PLUGIN_ALLOW_EMPTY_SOURCE"),
-			Destination: &settings.AllowEmptySource,
+			Sources:     cli.EnvVars("PLUGIN_UPLOAD_ALLOW_EMPTY_SOURCE"),
+			Destination: &settings.Upload.AllowEmptySource,
 			Category:    category,
 		},
 	}
