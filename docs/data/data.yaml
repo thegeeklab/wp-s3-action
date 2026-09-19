@@ -1,5 +1,11 @@
 ---
 properties:
+  - name: access_key
+    description: |
+      S3 access key.
+    type: string
+    required: true
+
   - name: action
     description: |
       S3 action to execute. Actions are low-level operations that can be combined to
@@ -19,56 +25,27 @@ properties:
     type: list
     required: true
 
-  - name: access_key
-    description: |
-      S3 access key.
-    type: string
-    required: true
-
-  - name: upload_acl
-    description: |
-      Access control list.
-    type: generic
-    required: false
-
   - name: bucket
     description: |
       Name of the bucket.
     type: string
     required: true
 
-  - name: upload_cache_control
+  - name: checksum_calculation
     description: |
-      Cache-control settings for uploads.
-    type: generic
+      Checksum calculation mode. Supported values are `required` and `supported`. For
+      third-party S3 implementations, `required` must most likely be used.
+    type: string
+    defaultValue: "required"
     required: false
 
   - name: cloudfront_distribution
     description: |
       ID of cloudfront distribution to invalidate.
 
-      CloudFront is an AWS service and is not supported by S3-compatible
-      endpoints such as Garage.
+      CloudFront is an AWS service and is not supported by S3-compatible endpoints such
+      as Garage.
     type: string
-    required: false
-
-  - name: upload_content_encoding
-    description: |
-      Content-encoding settings for uploads.
-    type: generic
-    required: false
-
-  - name: upload_content_type
-    description: |
-      Content-type settings for uploads.
-    type: generic
-    required: false
-
-  - name: upload_delete
-    description: |
-      Delete remote files that are not present in the local source directory during upload.
-    type: bool
-    defaultValue: false
     required: false
 
   - name: dry_run
@@ -85,18 +62,16 @@ properties:
     type: string
     required: false
 
+  - name: environment
+    type: dict
+    required: false
+
   - name: insecure_skip_verify
-    description: |
-      Skip SSL verification when connecting to the S3 endpoint. Useful for
-      self-hosted S3-compatible services (e.g., Garage) using self-signed
-      certificates.
     type: bool
     defaultValue: false
     required: false
 
   - name: log_level
-    description: |
-      Plugin log level.
     type: string
     defaultValue: "info"
     required: false
@@ -106,12 +81,6 @@ properties:
       Customize number concurrent files to process.
     type: integer
     defaultValue: 100
-    required: false
-
-  - name: upload_metadata
-    description: |
-      Additional metadata for uploads.
-    type: generic
     required: false
 
   - name: path_style
@@ -130,7 +99,7 @@ properties:
       The target server must support the S3 website redirect feature, so check your
       provider's documentation for static website hosting or website redirect support
       before using the `redirect` action.
-    type: generic
+    type: dict
     required: false
 
   - name: region
@@ -148,33 +117,63 @@ properties:
 
   - name: source
     description: |
-      Local working directory. Files are read from here during `upload` and written
-      here during `download`.
+      Local working directory. Files are read from here during `upload` and written here
+      during `download`.
     type: string
     defaultValue: "."
     required: false
 
   - name: target
     description: |
-      S3 path prefix for the bucket operations. Used by all actions to scope the
-      S3 key namespace (a leading `/` is stripped). Empty means the bucket root.
-      The `delete` and `download` actions require an explicit non-empty value.
+      S3 path prefix for the bucket operations. Used by all actions to scope the S3 key
+      namespace (a leading `/` is stripped). Empty means the bucket root. The `delete` and
+      `download` actions require an explicit non-empty value.
     type: string
-    defaultValue: ""
     required: false
 
-  - name: checksum_calculation
+  - name: upload_acl
     description: |
-      Checksum calculation mode. Supported values are `required` and `supported`.
-      For third-party S3 implementations, `required` must most likely be used.
-    type: string
-    defaultValue: "required"
+      Access control list.
+    type: dict
     required: false
 
   - name: upload_allow_empty_source
     description: |
-      Allow empty source directory. By default this setting will prevent deleting
-      all files from the target if `upload_delete: true` is set and the source directory is empty.
+      Allow empty source directory. By default this setting will prevent deleting all
+      files from the target if `upload_delete: true` is set and the source directory is
+      empty.
     type: bool
     defaultValue: false
+    required: false
+
+  - name: upload_cache_control
+    description: |
+      Cache-control settings for uploads.
+    type: dict
+    required: false
+
+  - name: upload_content_encoding
+    description: |
+      Content-encoding settings for uploads.
+    type: dict
+    required: false
+
+  - name: upload_content_type
+    description: |
+      Content-type settings for uploads.
+    type: dict
+    required: false
+
+  - name: upload_delete
+    description: |
+      Delete remote files that are not present in the local source directory during
+      upload.
+    type: bool
+    defaultValue: false
+    required: false
+
+  - name: upload_metadata
+    description: |
+      Additional metadata for uploads.
+    type: dict
     required: false
