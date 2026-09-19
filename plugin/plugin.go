@@ -9,7 +9,7 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-//go:generate go run ../internal/doc/main.go -output=../docs/data/data-raw.yaml
+//go:generate go run ../hack/docs-gen/main.go -output=../docs/data/data.yaml
 
 // Plugin implements provide the plugin implementation.
 type Plugin struct {
@@ -95,6 +95,20 @@ func New(e plugin_base.ExecuteFunc, build ...string) *Plugin {
 func Flags(settings *Settings, category string) []cli.Flag {
 	//nolint:mnd
 	return []cli.Flag{
+		// S3 action to execute. Actions are low-level operations that can be combined to
+		// compose higher-level workflows such as a full sync. Supported actions: `upload`,
+		// `download`, `delete`, `redirect`, `invalidate-cloudfront`.
+		//
+		// - **upload:** Uploads files from the local `source` directory to the S3 bucket `target` path.
+		//   When combined with the `upload_delete` setting, remote files that no longer exist locally are removed.
+		// - **download:** Downloads files from the S3 bucket `target` path to the local `source` directory.
+		//   Requires an explicit non-empty `target` so the entire bucket cannot be pulled by accident.
+		// - **delete:** Deletes all files from the S3 bucket `target` path.
+		//   Requires an explicit non-empty `target` so the entire bucket cannot be wiped by accident.
+		// - **redirect:** Creates redirect objects from the `redirects` setting under the `target` path.
+		//   Requires a target server that supports the S3 website redirect feature.
+		// - **invalidate-cloudfront:** Invalidates the configured CloudFront distribution path.
+		//   This action is AWS-specific and does not work with S3-compatible endpoints such as Garage.
 		&cli.StringSliceFlag{
 			Name:        "action",
 			Usage:       "S3 action to execute",
@@ -103,6 +117,7 @@ func Flags(settings *Settings, category string) []cli.Flag {
 			Required:    true,
 			Category:    category,
 		},
+		// Endpoint for the s3 connection.
 		&cli.StringFlag{
 			Name:        "endpoint",
 			Usage:       "endpoint for the s3 connection",
@@ -110,6 +125,7 @@ func Flags(settings *Settings, category string) []cli.Flag {
 			Destination: &settings.Endpoint,
 			Category:    category,
 		},
+		// S3 access key.
 		&cli.StringFlag{
 			Name:        "access-key",
 			Usage:       "s3 access key",
@@ -118,6 +134,7 @@ func Flags(settings *Settings, category string) []cli.Flag {
 			Required:    true,
 			Category:    category,
 		},
+		// S3 secret key.
 		&cli.StringFlag{
 			Name:        "secret-key",
 			Usage:       "s3 secret key",
@@ -126,6 +143,7 @@ func Flags(settings *Settings, category string) []cli.Flag {
 			Required:    true,
 			Category:    category,
 		},
+		// Enable path style for bucket paths.
 		&cli.BoolFlag{
 			Name:        "path-style",
 			Usage:       "enable path style for bucket paths",
@@ -133,6 +151,7 @@ func Flags(settings *Settings, category string) []cli.Flag {
 			Destination: &settings.PathStyle,
 			Category:    category,
 		},
+		// Name of the bucket.
 		&cli.StringFlag{
 			Name:        "bucket",
 			Usage:       "name of the bucket",
@@ -141,6 +160,7 @@ func Flags(settings *Settings, category string) []cli.Flag {
 			Required:    true,
 			Category:    category,
 		},
+		// S3 region.
 		&cli.StringFlag{
 			Name:        "region",
 			Usage:       "s3 region",
@@ -149,6 +169,8 @@ func Flags(settings *Settings, category string) []cli.Flag {
 			Destination: &settings.Region,
 			Category:    category,
 		},
+		// Local working directory. Files are read from here during `upload` and written here
+		// during `download`.
 		&cli.StringFlag{
 			Name:        "source",
 			Usage:       "upload source path",
@@ -157,6 +179,9 @@ func Flags(settings *Settings, category string) []cli.Flag {
 			Destination: &settings.Source,
 			Category:    category,
 		},
+		// S3 path prefix for the bucket operations. Used by all actions to scope the S3 key
+		// namespace (a leading `/` is stripped). Empty means the bucket root. The `delete` and
+		// `download` actions require an explicit non-empty value.
 		&cli.StringFlag{
 			Name:        "target",
 			Usage:       "s3 key prefix used to scope the action (a leading '/' is stripped)",
@@ -165,6 +190,8 @@ func Flags(settings *Settings, category string) []cli.Flag {
 			Destination: &settings.Target,
 			Category:    category,
 		},
+		// Delete remote files that are not present in the local source directory during
+		// upload.
 		&cli.BoolFlag{
 			Name:        "upload.delete",
 			Usage:       "delete locally removed files from the target",
@@ -172,6 +199,7 @@ func Flags(settings *Settings, category string) []cli.Flag {
 			Destination: &settings.Upload.Delete,
 			Category:    category,
 		},
+		// Access control list.
 		&plugin_cli.StringMapFlag{
 			Name:        "upload.acl",
 			Usage:       "access control list",
@@ -179,6 +207,7 @@ func Flags(settings *Settings, category string) []cli.Flag {
 			Destination: &settings.Upload.ACL,
 			Category:    category,
 		},
+		// Content-type settings for uploads.
 		&plugin_cli.StringMapFlag{
 			Name:        "upload.content-type",
 			Usage:       "content-type settings for uploads",
@@ -186,6 +215,7 @@ func Flags(settings *Settings, category string) []cli.Flag {
 			Destination: &settings.Upload.ContentType,
 			Category:    category,
 		},
+		// Content-encoding settings for uploads.
 		&plugin_cli.StringMapFlag{
 			Name:        "upload.content-encoding",
 			Usage:       "content-encoding settings for uploads",
@@ -193,6 +223,7 @@ func Flags(settings *Settings, category string) []cli.Flag {
 			Destination: &settings.Upload.ContentEncoding,
 			Category:    category,
 		},
+		// Cache-control settings for uploads.
 		&plugin_cli.StringMapFlag{
 			Name:        "upload.cache-control",
 			Usage:       "cache-control settings for uploads",
@@ -200,6 +231,7 @@ func Flags(settings *Settings, category string) []cli.Flag {
 			Destination: &settings.Upload.CacheControl,
 			Category:    category,
 		},
+		// Additional metadata for uploads.
 		&plugin_cli.DeepStringMapFlag{
 			Name:        "upload.metadata",
 			Usage:       "additional metadata for uploads",
@@ -207,6 +239,13 @@ func Flags(settings *Settings, category string) []cli.Flag {
 			Destination: &settings.Upload.Metadata,
 			Category:    category,
 		},
+		// Map of source paths to redirect destinations. Each key is created as an S3 object
+		// under the configured `target` path with the `x-amz-website-redirect-location` header
+		// set to the corresponding value.
+		//
+		// The target server must support the S3 website redirect feature, so check your
+		// provider's documentation for static website hosting or website redirect support
+		// before using the `redirect` action.
 		&plugin_cli.StringMapFlag{
 			Name:        "redirects",
 			Usage:       "redirects to create",
@@ -214,6 +253,10 @@ func Flags(settings *Settings, category string) []cli.Flag {
 			Destination: &settings.Redirects,
 			Category:    category,
 		},
+		// ID of cloudfront distribution to invalidate.
+		//
+		// CloudFront is an AWS service and is not supported by S3-compatible endpoints such
+		// as Garage.
 		&cli.StringFlag{
 			Name:        "cloudfront.distribution",
 			Usage:       "ID of cloudfront distribution to invalidate",
@@ -221,6 +264,8 @@ func Flags(settings *Settings, category string) []cli.Flag {
 			Destination: &settings.CloudFront.Distribution,
 			Category:    category,
 		},
+		// Dry run disables API calls. When enabled, the plugin logs the actions it would take
+		// without actually uploading, downloading, deleting, or redirecting.
 		&cli.BoolFlag{
 			Name:        "dry-run",
 			Usage:       "dry run disables api calls",
@@ -228,6 +273,7 @@ func Flags(settings *Settings, category string) []cli.Flag {
 			Destination: &settings.DryRun,
 			Category:    category,
 		},
+		// Customize number concurrent files to process.
 		&cli.IntFlag{
 			Name:        "max-concurrency",
 			Usage:       "customize number concurrent files to process",
@@ -236,6 +282,8 @@ func Flags(settings *Settings, category string) []cli.Flag {
 			Destination: &settings.MaxConcurrency,
 			Category:    category,
 		},
+		// Checksum calculation mode. Supported values are `required` and `supported`. For
+		// third-party S3 implementations, `required` must most likely be used.
 		&cli.StringFlag{
 			Name:        "checksum-calculation",
 			Usage:       fmt.Sprintf("checksum calculation mode (%s or %s)", aws.ChecksumSupported, aws.ChecksumRequired),
@@ -249,6 +297,9 @@ func Flags(settings *Settings, category string) []cli.Flag {
 			},
 			Category: category,
 		},
+		// Allow empty source directory. By default this setting will prevent deleting all
+		// files from the target if `upload_delete: true` is set and the source directory is
+		// empty.
 		&cli.BoolFlag{
 			Name:        "upload.allow-empty-source",
 			Usage:       "allow empty source directory",

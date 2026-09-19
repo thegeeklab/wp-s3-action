@@ -48,3 +48,5 @@ require (
 	golang.org/x/net v0.59.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 )
+
+replace github.com/thegeeklab/wp-plugin-go/v6 => /Users/kaussow/Devel/.private/golang/thegeeklab/wp-plugin-go
