@@ -62,16 +62,16 @@ properties:
     type: string
     required: false
 
-  - name: environment
-    type: dict
-    required: false
-
   - name: insecure_skip_verify
+    description: |
+      Skip SSL verification.
     type: bool
     defaultValue: false
     required: false
 
   - name: log_level
+    description: |
+      Plugin log level.
     type: string
     defaultValue: "info"
     required: false

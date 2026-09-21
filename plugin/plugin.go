@@ -2,9 +2,10 @@ package plugin
 
 import (
 	"fmt"
+	"slices"
 
-	plugin_cli "github.com/thegeeklab/wp-plugin-go/v6/cli"
-	plugin_base "github.com/thegeeklab/wp-plugin-go/v6/plugin"
+	plugin_cli "github.com/thegeeklab/wp-plugin-go/v7/cli"
+	plugin_base "github.com/thegeeklab/wp-plugin-go/v7/plugin"
 	"github.com/thegeeklab/wp-s3-action/aws"
 	"github.com/urfave/cli/v3"
 )
@@ -67,9 +68,13 @@ func New(e plugin_base.ExecuteFunc, build ...string) *Plugin {
 	}
 
 	options := plugin_base.Options{
-		Name:                "wp-s3-action",
-		Description:         "Perform S3 actions",
-		Flags:               Flags(p.Settings, plugin_base.FlagsPluginCategory),
+		Name:        "wp-s3-action",
+		Description: "Perform S3 actions",
+		Flags: slices.Concat(
+			plugin_base.LoggingFlags(plugin_base.FlagsPluginCategory),
+			plugin_base.NetworkFlags(plugin_base.FlagsPluginCategory),
+			Flags(p.Settings, plugin_base.FlagsPluginCategory),
+		),
 		Execute:             p.run,
 		HideWoodpeckerFlags: true,
 	}

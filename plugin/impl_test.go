@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	plugin_base "github.com/thegeeklab/wp-plugin-go/v6/plugin"
+	plugin_base "github.com/thegeeklab/wp-plugin-go/v7/plugin"
 	"github.com/thegeeklab/wp-s3-action/aws"
 	"github.com/thegeeklab/wp-s3-action/aws/mocks"
 )
@@ -31,15 +31,15 @@ func newMockClient(t *testing.T) (*aws.Client, *mocks.MockS3APIClient, *mocks.Mo
 	return aws.NewTestClient(mockS3, mockCf), mockS3, mockCf
 }
 
-func newTestPlugin(ctx context.Context, s *Settings) *Plugin {
+func newTestPlugin(ctx context.Context, s *Settings) (*Plugin, plugin_base.Network) {
 	if s == nil {
 		s = &Settings{}
 	}
 
 	return &Plugin{
-		Plugin:   &plugin_base.Plugin{Network: plugin_base.Network{Context: ctx}},
+		Plugin:   plugin_base.New(plugin_base.Options{}),
 		Settings: s,
-	}
+	}, plugin_base.Network{Context: ctx}
 }
 
 var (
@@ -66,12 +66,12 @@ func TestHandleDelete(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		setup   func(t *testing.T) (*Plugin, *aws.Client)
+		setup   func(t *testing.T) (*Plugin, *aws.Client, plugin_base.Network)
 		wantErr error
 	}{
 		{
 			name: "delete all keys under target in a single batched call",
-			setup: func(t *testing.T) (*Plugin, *aws.Client) {
+			setup: func(t *testing.T) (*Plugin, *aws.Client, plugin_base.Network) {
 				t.Helper()
 
 				client, mockS3, _ := newMockClient(t)
@@ -81,18 +81,18 @@ func TestHandleDelete(t *testing.T) {
 					return len(input.Delete.Objects) == 2
 				})).Return(&s3.DeleteObjectsOutput{}, nil).Once()
 
-				p := newTestPlugin(t.Context(), &Settings{
+				p, network := newTestPlugin(t.Context(), &Settings{
 					Bucket:         "bucket",
 					Target:         "blog",
 					MaxConcurrency: 2,
 				})
 
-				return p, client
+				return p, client, network
 			},
 		},
 		{
 			name: "empty list produces no delete jobs",
-			setup: func(t *testing.T) (*Plugin, *aws.Client) {
+			setup: func(t *testing.T) (*Plugin, *aws.Client, plugin_base.Network) {
 				t.Helper()
 
 				client, mockS3, _ := newMockClient(t)
@@ -100,37 +100,37 @@ func TestHandleDelete(t *testing.T) {
 					Return(listResult(), nil)
 				mockS3.AssertNotCalled(t, "DeleteObjects", mock.Anything, mock.Anything)
 
-				p := newTestPlugin(t.Context(), &Settings{
+				p, network := newTestPlugin(t.Context(), &Settings{
 					Bucket:         "bucket",
 					Target:         "blog",
 					MaxConcurrency: 1,
 				})
 
-				return p, client
+				return p, client, network
 			},
 		},
 		{
 			name: "list error propagates",
-			setup: func(t *testing.T) (*Plugin, *aws.Client) {
+			setup: func(t *testing.T) (*Plugin, *aws.Client, plugin_base.Network) {
 				t.Helper()
 
 				client, mockS3, _ := newMockClient(t)
 				mockS3.On("ListObjects", mock.Anything, mock.Anything).
 					Return(&s3.ListObjectsOutput{}, errMockList)
 
-				p := newTestPlugin(t.Context(), &Settings{
+				p, network := newTestPlugin(t.Context(), &Settings{
 					Bucket:         "bucket",
 					Target:         "blog",
 					MaxConcurrency: 1,
 				})
 
-				return p, client
+				return p, client, network
 			},
 			wantErr: errMockList,
 		},
 		{
 			name: "sibling-prefix keys are skipped",
-			setup: func(t *testing.T) (*Plugin, *aws.Client) {
+			setup: func(t *testing.T) (*Plugin, *aws.Client, plugin_base.Network) {
 				t.Helper()
 
 				client, mockS3, _ := newMockClient(t)
@@ -140,18 +140,18 @@ func TestHandleDelete(t *testing.T) {
 					return len(input.Delete.Objects) == 1 && *input.Delete.Objects[0].Key == "blog/a.txt"
 				})).Return(&s3.DeleteObjectsOutput{}, nil).Once()
 
-				p := newTestPlugin(t.Context(), &Settings{
+				p, network := newTestPlugin(t.Context(), &Settings{
 					Bucket:         "bucket",
 					Target:         "blog",
 					MaxConcurrency: 1,
 				})
 
-				return p, client
+				return p, client, network
 			},
 		},
 		{
 			name: "split into chunks at the s3 batch limit",
-			setup: func(t *testing.T) (*Plugin, *aws.Client) {
+			setup: func(t *testing.T) (*Plugin, *aws.Client, plugin_base.Network) {
 				t.Helper()
 
 				keys := make([]string, 0, aws.MaxDeleteBatch+1)
@@ -166,13 +166,13 @@ func TestHandleDelete(t *testing.T) {
 					return len(input.Delete.Objects) <= aws.MaxDeleteBatch
 				})).Return(&s3.DeleteObjectsOutput{}, nil).Times(2)
 
-				p := newTestPlugin(t.Context(), &Settings{
+				p, network := newTestPlugin(t.Context(), &Settings{
 					Bucket:         "bucket",
 					Target:         "blog",
 					MaxConcurrency: 1,
 				})
 
-				return p, client
+				return p, client, network
 			},
 		},
 	}
@@ -181,9 +181,9 @@ func TestHandleDelete(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			p, client := tt.setup(t)
+			p, client, network := tt.setup(t)
 
-			err := p.handleDelete(client)
+			err := p.handleDelete(network, client)
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
 
@@ -254,14 +254,14 @@ func TestHandleRedirect(t *testing.T) {
 				mockS3.AssertNotCalled(t, "PutObject", mock.Anything, mock.Anything)
 			}
 
-			p := newTestPlugin(t.Context(), &Settings{
+			p, network := newTestPlugin(t.Context(), &Settings{
 				Bucket:         "bucket",
 				Target:         tt.target,
 				MaxConcurrency: 1,
 				Redirects:      tt.redirects,
 			})
 
-			err := p.handleRedirect(client)
+			err := p.handleRedirect(network, client)
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
 
@@ -336,14 +336,14 @@ func TestHandleInvalidateCloudFront(t *testing.T) {
 				})).Return(&cloudfront.CreateInvalidationOutput{}, nil).Once()
 			}
 
-			p := newTestPlugin(t.Context(), &Settings{
+			p, network := newTestPlugin(t.Context(), &Settings{
 				Bucket:     "bucket",
 				Target:     tt.target,
 				DryRun:     tt.dryRun,
 				CloudFront: CloudFront{Distribution: tt.distribution},
 			})
 
-			err := p.handleInvalidateCloudFront(client)
+			err := p.handleInvalidateCloudFront(network, client)
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
 
@@ -400,12 +400,12 @@ func TestRunActionJobs(t *testing.T) {
 			client, mockS3, _ := newMockClient(t)
 			tt.mockDelete(t, mockS3)
 
-			p := newTestPlugin(t.Context(), &Settings{
+			p, network := newTestPlugin(t.Context(), &Settings{
 				Bucket:         "bucket",
 				MaxConcurrency: 1,
 			})
 
-			err := p.runActionJobs(client, S3ActionDelete, func(jobs chan<- Job) error {
+			err := p.runActionJobs(network, client, S3ActionDelete, func(jobs chan<- Job) error {
 				return tt.build(t, jobs)
 			})
 
@@ -485,7 +485,7 @@ func TestValidateSource(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			p := newTestPlugin(t.Context(), tt.setup(t))
+			p, _ := newTestPlugin(t.Context(), tt.setup(t))
 
 			err := p.validateSource()
 
@@ -510,7 +510,7 @@ func TestCreateUploadJobs(t *testing.T) {
 	require.NoError(t, os.Mkdir(filepath.Join(dir, "sub"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "sub", "c.txt"), []byte("c"), 0o600))
 
-	p := newTestPlugin(t.Context(), &Settings{
+	p, _ := newTestPlugin(t.Context(), &Settings{
 		Source: dir,
 		Target: "blog",
 	})
@@ -666,7 +666,7 @@ func TestCreateMirrorDeleteJobs(t *testing.T) {
 			mockS3.On("ListObjects", mock.Anything, mock.Anything).
 				Return(listResult(tt.remoteKeys...), nil)
 
-			p := newTestPlugin(t.Context(), &Settings{
+			p, _ := newTestPlugin(t.Context(), &Settings{
 				Target:    tt.target,
 				Redirects: tt.redirects,
 			})
@@ -698,12 +698,12 @@ func TestHandleDownload(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		setup   func(t *testing.T) (*Plugin, *aws.Client)
+		setup   func(t *testing.T) (*Plugin, *aws.Client, plugin_base.Network)
 		wantErr error
 	}{
 		{
 			name: "download builds one job per remote key",
-			setup: func(t *testing.T) (*Plugin, *aws.Client) {
+			setup: func(t *testing.T) (*Plugin, *aws.Client, plugin_base.Network) {
 				t.Helper()
 
 				client, mockS3, _ := newMockClient(t)
@@ -714,33 +714,33 @@ func TestHandleDownload(t *testing.T) {
 						return &s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("body"))}
 					}, nil).Twice()
 
-				p := newTestPlugin(t.Context(), &Settings{
+				p, network := newTestPlugin(t.Context(), &Settings{
 					Bucket:         "bucket",
 					Source:         t.TempDir(),
 					Target:         "blog",
 					MaxConcurrency: 2,
 				})
 
-				return p, client
+				return p, client, network
 			},
 		},
 		{
 			name: "list failure propagates with context",
-			setup: func(t *testing.T) (*Plugin, *aws.Client) {
+			setup: func(t *testing.T) (*Plugin, *aws.Client, plugin_base.Network) {
 				t.Helper()
 
 				client, mockS3, _ := newMockClient(t)
 				mockS3.On("ListObjects", mock.Anything, mock.Anything).
 					Return(&s3.ListObjectsOutput{}, errMockList)
 
-				p := newTestPlugin(t.Context(), &Settings{
+				p, network := newTestPlugin(t.Context(), &Settings{
 					Bucket:         "bucket",
 					Source:         t.TempDir(),
 					Target:         "blog",
 					MaxConcurrency: 1,
 				})
 
-				return p, client
+				return p, client, network
 			},
 			wantErr: errMockList,
 		},
@@ -750,9 +750,9 @@ func TestHandleDownload(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			p, client := tt.setup(t)
+			p, client, network := tt.setup(t)
 
-			err := p.handleDownload(client)
+			err := p.handleDownload(network, client)
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
 
@@ -777,14 +777,14 @@ func TestHandleDownloadFiltersSiblingKeys(t *testing.T) {
 			return &s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("body"))}
 		}, nil).Once()
 
-	p := newTestPlugin(t.Context(), &Settings{
+	p, network := newTestPlugin(t.Context(), &Settings{
 		Bucket:         "bucket",
 		Source:         t.TempDir(),
 		Target:         "blog",
 		MaxConcurrency: 1,
 	})
 
-	err := p.handleDownload(client)
+	err := p.handleDownload(network, client)
 	assert.NoError(t, err)
 	mockS3.AssertExpectations(t)
 }
@@ -794,12 +794,12 @@ func TestHandleUpload(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		setup   func(t *testing.T) (*Plugin, *aws.Client)
+		setup   func(t *testing.T) (*Plugin, *aws.Client, plugin_base.Network)
 		wantErr error
 	}{
 		{
 			name: "uploads files from source to target",
-			setup: func(t *testing.T) (*Plugin, *aws.Client) {
+			setup: func(t *testing.T) (*Plugin, *aws.Client, plugin_base.Network) {
 				t.Helper()
 
 				source := t.TempDir()
@@ -812,30 +812,30 @@ func TestHandleUpload(t *testing.T) {
 				mockS3.On("PutObject", mock.Anything, mock.Anything).
 					Return(&s3.PutObjectOutput{}, nil)
 
-				p := newTestPlugin(t.Context(), &Settings{
+				p, network := newTestPlugin(t.Context(), &Settings{
 					Bucket:         "bucket",
 					Source:         source,
 					Target:         "blog",
 					MaxConcurrency: 2,
 				})
 
-				return p, client
+				return p, client, network
 			},
 		},
 		{
 			name: "empty source fails when allow flag is off",
-			setup: func(t *testing.T) (*Plugin, *aws.Client) {
+			setup: func(t *testing.T) (*Plugin, *aws.Client, plugin_base.Network) {
 				t.Helper()
 
 				client, _, _ := newMockClient(t)
 
-				p := newTestPlugin(t.Context(), &Settings{
+				p, network := newTestPlugin(t.Context(), &Settings{
 					Bucket: "bucket",
 					Source: t.TempDir(),
 					Upload: Upload{AllowEmptySource: false},
 				})
 
-				return p, client
+				return p, client, network
 			},
 			wantErr: ErrEmptySourceDirectory,
 		},
@@ -845,9 +845,9 @@ func TestHandleUpload(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			p, client := tt.setup(t)
+			p, client, network := tt.setup(t)
 
-			err := p.handleUpload(client)
+			err := p.handleUpload(network, client)
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
 

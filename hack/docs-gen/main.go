@@ -12,8 +12,8 @@ import (
 	"os"
 	"text/template"
 
-	plugin_docs "github.com/thegeeklab/wp-plugin-go/v6/docs"
-	plugin_template "github.com/thegeeklab/wp-plugin-go/v6/template"
+	plugin_docs "github.com/thegeeklab/wp-plugin-go/v7/docs"
+	plugin_template "github.com/thegeeklab/wp-plugin-go/v7/template"
 	"github.com/thegeeklab/wp-s3-action/plugin"
 )
 
@@ -34,7 +34,7 @@ func main() {
 	descs := plugin_docs.LongDescriptionsFor(*sourceFile, defaultMatchers()...)
 
 	funcs := plugin_template.LoadFuncMap()
-	funcs["longDesc"] = longDescFunc(descs)
+	funcs["longDesc"] = plugin_docs.LongDescriptionFunc(descs, plugin_docs.ShortDescriptionFallback)
 	funcs["yamlLiteral"] = yamlLiteral
 
 	docTemplate, err := template.New("docs").Funcs(funcs).Parse(docsTemplate)
@@ -67,20 +67,6 @@ func defaultMatchers() []plugin_docs.FlagTypeMatcher {
 // docsTemplate.
 func yamlLiteral(d *plugin_docs.LongDescription) string {
 	return plugin_docs.LongDescriptionYAMLBlock(d, yamlDescriptionIndent)
-}
-
-// longDescFunc returns a template function that yields the extracted long
-// description for a flag, or nil when none was found.
-func longDescFunc(
-	descs map[string]*plugin_docs.LongDescription,
-) func(*plugin_docs.PluginArg) *plugin_docs.LongDescription {
-	return func(arg *plugin_docs.PluginArg) *plugin_docs.LongDescription {
-		if d, ok := descs[arg.Name]; ok && !d.IsZero() {
-			return d
-		}
-
-		return nil
-	}
 }
 
 const docsTemplate = `---
