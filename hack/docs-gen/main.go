@@ -31,10 +31,10 @@ func main() {
 
 	p := plugin.New(nil)
 	templateData := plugin_docs.GetTemplateDataWithSource(p.App, *sourceFile)
-	descs := plugin_docs.LongDescriptionsFor(*sourceFile, defaultMatchers()...)
+	descriptions := plugin_docs.LongDescriptionsFor(*sourceFile, defaultMatchers()...)
 
 	funcs := plugin_template.LoadFuncMap()
-	funcs["longDesc"] = plugin_docs.LongDescriptionFunc(descs, plugin_docs.ShortDescriptionFallback)
+	funcs["longDesc"] = plugin_docs.LongDescriptionFunc(descriptions, plugin_docs.ShortDescriptionFallback)
 	funcs["yamlLiteral"] = yamlLiteral
 
 	docTemplate, err := template.New("docs").Funcs(funcs).Parse(docsTemplate)

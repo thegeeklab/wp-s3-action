@@ -13,7 +13,8 @@
     "libcrypto",
     "devel",
     "GOMODCACHE",
-    "GOCACHE"
+    "GOCACHE",
+    "urfave"
   ],
   "ignorePaths": [
     ".woodpecker",
