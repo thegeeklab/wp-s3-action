@@ -3,8 +3,8 @@ package plugin
 import (
 	"fmt"
 
-	plugin_cli "github.com/thegeeklab/wp-plugin-go/v6/cli"
-	plugin_base "github.com/thegeeklab/wp-plugin-go/v6/plugin"
+	plugin_cli "github.com/thegeeklab/wp-plugin-go/v7/cli"
+	plugin_base "github.com/thegeeklab/wp-plugin-go/v7/plugin"
 	"github.com/thegeeklab/wp-s3-action/aws"
 	"github.com/urfave/cli/v3"
 )
