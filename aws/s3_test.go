@@ -424,9 +424,10 @@ func TestS3_Delete(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		setup   func(t *testing.T) (*S3, S3DeleteOptions, func())
-		wantErr error
+		name            string
+		setup           func(t *testing.T) (*S3, S3DeleteOptions, func())
+		wantErr         error
+		wantErrContains []string
 	}{
 		{
 			name: "skip when keys are empty",
@@ -516,6 +517,11 @@ func TestS3_Delete(t *testing.T) {
 								Code:    aws.String("AccessDenied"),
 								Message: aws.String("Access Denied"),
 							},
+							{
+								Key:     aws.String("b.txt"),
+								Code:    aws.String("AccessDenied"),
+								Message: aws.String("Access Denied"),
+							},
 						},
 					}, nil)
 
@@ -526,7 +532,8 @@ func TestS3_Delete(t *testing.T) {
 					S3DeleteOptions{RemoteObjectKeys: []string{"a.txt", "b.txt"}},
 					func() {}
 			},
-			wantErr: ErrPartialDelete,
+			wantErr:         ErrPartialDelete,
+			wantErrContains: []string{"a.txt", "b.txt"},
 		},
 	}
 
@@ -540,6 +547,10 @@ func TestS3_Delete(t *testing.T) {
 			err := svc.Delete(t.Context(), opt)
 			if tt.wantErr != nil {
 				assert.Error(t, err)
+
+				for _, want := range tt.wantErrContains {
+					assert.Contains(t, err.Error(), want)
+				}
 
 				return
 			}
@@ -1142,6 +1153,62 @@ func TestS3_UploadETagForms(t *testing.T) {
 
 			assert.NoError(t, err)
 			mockS3Client.AssertExpectations(t)
+		})
+	}
+}
+
+func TestS3_UploadCopySourceEncoding(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		remoteKey      string
+		wantCopySource string
+	}{
+		{
+			name:           "plain key is left unchanged",
+			remoteKey:      "remote/path/file.txt",
+			wantCopySource: "test-bucket/remote/path/file.txt",
+		},
+		{
+			name:           "space in key is percent-encoded",
+			remoteKey:      "remote/path/my file.txt",
+			wantCopySource: "test-bucket/remote/path/my%20file.txt",
+		},
+		{
+			name:           "reserved characters are percent-encoded and slashes preserved",
+			remoteKey:      "remote/path/a#b?.txt",
+			wantCopySource: "test-bucket/remote/path/a%23b%3F.txt",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mockS3Client := mocks.NewMockS3APIClient(t)
+			mockS3Client.On("HeadObject", mock.Anything, mock.Anything).Return(&s3.HeadObjectOutput{
+				ETag:        aws.String(`"5d41402abc4b2a76b9719d911017c592"`),
+				ContentType: aws.String("application/octet-stream"),
+			}, nil)
+
+			var copySource string
+			mockS3Client.On("CopyObject", mock.Anything, mock.MatchedBy(func(input *s3.CopyObjectInput) bool {
+				copySource = aws.ToString(input.CopySource)
+
+				return true
+			})).Return(&s3.CopyObjectOutput{}, nil)
+
+			svc := &S3{client: mockS3Client, Bucket: "test-bucket"}
+
+			err := svc.Upload(t.Context(), S3UploadOptions{
+				LocalFilePath:   createTempFile(t, "file.txt"),
+				RemoteObjectKey: tt.remoteKey,
+				ContentType:     map[string]string{"*.txt": "text/plain"},
+			})
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantCopySource, copySource)
 		})
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"mime"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -151,7 +152,7 @@ func (u *S3) Upload(ctx context.Context, opt S3UploadOptions) error {
 		_, err = u.client.CopyObject(ctx, &s3.CopyObjectInput{
 			Bucket:            &u.Bucket,
 			Key:               &opt.RemoteObjectKey,
-			CopySource:        aws.String(fmt.Sprintf("%s/%s", u.Bucket, opt.RemoteObjectKey)),
+			CopySource:        aws.String(copySource(u.Bucket, opt.RemoteObjectKey)),
 			ACL:               types.ObjectCannedACL(acl),
 			ContentType:       &contentType,
 			Metadata:          metadata,
@@ -365,6 +366,20 @@ func parseETag(etag string) (string, bool) {
 	return etag, false
 }
 
+// copySource returns a URL-encoded S3 CopySource value of the form
+// "bucket/key". Slashes in the key are preserved as the object path
+// separators while each remaining segment is percent-encoded, as required
+// by the x-amz-copy-source header.
+func copySource(bucket, key string) string {
+	parts := strings.Split(key, "/")
+
+	for i, p := range parts {
+		parts[i] = url.PathEscape(p)
+	}
+
+	return bucket + "/" + strings.Join(parts, "/")
+}
+
 // getMetadata returns the metadata for the given file based on the provided patterns.
 func getMetadata(file string, patterns map[string]map[string]string) map[string]string {
 	metadata := make(map[string]string)
@@ -432,12 +447,16 @@ func (u *S3) Delete(ctx context.Context, opt S3DeleteOptions) error {
 	}
 
 	// Quiet=true elides per-object successes but still returns per-object
-	// failures via resp.Errors. Surface them so a partial batch failure
-	// is not silently swallowed.
+	// failures via resp.Errors. Surface every failure so a partial batch
+	// failure is not silently swallowed.
 	if len(resp.Errors) > 0 {
-		first := resp.Errors[0]
+		failures := make([]string, 0, len(resp.Errors))
 
-		return fmt.Errorf("%w: %s (%s)", ErrPartialDelete, aws.ToString(first.Key), aws.ToString(first.Message))
+		for _, e := range resp.Errors {
+			failures = append(failures, fmt.Sprintf("%s (%s)", aws.ToString(e.Key), aws.ToString(e.Message)))
+		}
+
+		return fmt.Errorf("%w: %s", ErrPartialDelete, strings.Join(failures, "; "))
 	}
 
 	return nil
