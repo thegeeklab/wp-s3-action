@@ -1193,6 +1193,7 @@ func TestS3_UploadCopySourceEncoding(t *testing.T) {
 			}, nil)
 
 			var copySource string
+
 			mockS3Client.On("CopyObject", mock.Anything, mock.MatchedBy(func(input *s3.CopyObjectInput) bool {
 				copySource = aws.ToString(input.CopySource)
 
