@@ -11,7 +11,10 @@
     "Msgf",
     "tmpl",
     "libcrypto",
-    "devel"
+    "devel",
+    "GOMODCACHE",
+    "GOCACHE",
+    "urfave"
   ],
   "ignorePaths": [
     ".woodpecker",
