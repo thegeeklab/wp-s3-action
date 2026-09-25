@@ -25,6 +25,11 @@ type S3 struct {
 	createFile func(string) (io.WriteCloser, error)
 }
 
+// NewS3 wraps an S3APIClient in the higher-level *S3 used by the plugin.
+func NewS3(client S3APIClient) *S3 {
+	return &S3{client: client}
+}
+
 var (
 	ErrEmptyLocalFilePath   = errors.New("local file path is empty")
 	ErrLocalPathOutsideRoot = errors.New("local path resolves outside configured root")
@@ -65,18 +70,29 @@ type S3ListOptions struct {
 	Path string
 }
 
+// UploadResult describes the outcome of an Upload call. The zero value is
+// returned alongside a non-nil error and must not be interpreted on its own.
+type UploadResult string
+
+const (
+	UploadResultAdded    UploadResult = "added"
+	UploadResultModified UploadResult = "modified"
+	UploadResultUpdated  UploadResult = "updated"
+	UploadResultSkipped  UploadResult = "skipped"
+)
+
 // Upload uploads a file to an S3 bucket. It first checks if the file already exists in the bucket
 // and compares the local file's content and metadata with the remote file. If the file has changed,
 // it updates the remote file's metadata. If the file does not exist or has changed,
 // it uploads the local file to the remote bucket.
-func (u *S3) Upload(ctx context.Context, opt S3UploadOptions) error {
+func (u *S3) Upload(ctx context.Context, opt S3UploadOptions) (UploadResult, error) {
 	if opt.LocalFilePath == "" {
-		return nil
+		return UploadResultSkipped, nil
 	}
 
 	file, err := os.Open(opt.LocalFilePath)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer file.Close()
 
@@ -93,7 +109,7 @@ func (u *S3) Upload(ctx context.Context, opt S3UploadOptions) error {
 	if err != nil {
 		var notFoundErr *types.NotFound
 		if !errors.As(err, &notFoundErr) {
-			return err
+			return "", err
 		}
 
 		log.Debug().Msgf(
@@ -104,7 +120,7 @@ func (u *S3) Upload(ctx context.Context, opt S3UploadOptions) error {
 		)
 
 		if u.DryRun {
-			return nil
+			return UploadResultAdded, nil
 		}
 
 		_, err = u.client.PutObject(ctx, &s3.PutObjectInput{
@@ -118,7 +134,7 @@ func (u *S3) Upload(ctx context.Context, opt S3UploadOptions) error {
 			ContentEncoding: &contentEncoding,
 		})
 
-		return err
+		return UploadResultAdded, err
 	}
 
 	//nolint:gosec
@@ -140,13 +156,13 @@ func (u *S3) Upload(ctx context.Context, opt S3UploadOptions) error {
 		if !shouldCopy {
 			log.Debug().Msgf("skipping '%s' because hashes and metadata match", opt.LocalFilePath)
 
-			return nil
+			return UploadResultSkipped, nil
 		}
 
 		log.Debug().Msgf("updating metadata for '%s' %s", opt.LocalFilePath, reason)
 
 		if u.DryRun {
-			return nil
+			return UploadResultUpdated, nil
 		}
 
 		_, err = u.client.CopyObject(ctx, &s3.CopyObjectInput{
@@ -161,7 +177,7 @@ func (u *S3) Upload(ctx context.Context, opt S3UploadOptions) error {
 			ContentEncoding:   &contentEncoding,
 		})
 
-		return err
+		return UploadResultUpdated, err
 	}
 
 	// hashes differ OR remote is multipart OR remote ETag is missing.
@@ -177,13 +193,13 @@ func (u *S3) Upload(ctx context.Context, opt S3UploadOptions) error {
 
 	_, err = file.Seek(0, 0)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	log.Debug().Msgf("uploading '%s' with content-type '%s' and permissions '%s'", opt.LocalFilePath, contentType, acl)
 
 	if u.DryRun {
-		return nil
+		return UploadResultModified, nil
 	}
 
 	_, err = u.client.PutObject(ctx, &s3.PutObjectInput{
@@ -197,7 +213,7 @@ func (u *S3) Upload(ctx context.Context, opt S3UploadOptions) error {
 		ContentEncoding: &contentEncoding,
 	})
 
-	return err
+	return UploadResultModified, err
 }
 
 // shouldCopyObject determines whether an S3 object should be copied based on changes in content type,

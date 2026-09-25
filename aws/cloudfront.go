@@ -15,6 +15,12 @@ type Cloudfront struct {
 	Distribution string
 }
 
+// NewCloudfront wraps a CloudfrontAPIClient in the higher-level *Cloudfront
+// used by the plugin.
+func NewCloudfront(client CloudfrontAPIClient) *Cloudfront {
+	return &Cloudfront{client: client}
+}
+
 type CloudfrontInvalidateOptions struct {
 	Path string
 }

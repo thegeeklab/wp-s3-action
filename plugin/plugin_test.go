@@ -526,7 +526,7 @@ func TestRunJobsUnknownAction(t *testing.T) {
 
 	close(jobs)
 
-	err := p.runJobs(t.Context(), nil, jobs)
+	err := p.runJobs(t.Context(), nil, S3Action("bogus"), jobs)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "bogus")
 }

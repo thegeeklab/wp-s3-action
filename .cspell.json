@@ -14,7 +14,8 @@
     "devel",
     "GOMODCACHE",
     "GOCACHE",
-    "urfave"
+    "urfave",
+    "zerolog"
   ],
   "ignorePaths": [
     ".woodpecker",
