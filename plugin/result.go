@@ -3,12 +3,14 @@ package plugin
 import (
 	"cmp"
 	"fmt"
+	"io"
+	"os"
 	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
 
-	"github.com/rs/zerolog/log"
+	"github.com/mattn/go-isatty"
 )
 
 // ResultStatus describes the outcome of a single processed job.
@@ -82,9 +84,54 @@ func (s Summary) String() string {
 	return strings.Join(parts, ", ")
 }
 
+// colorsEnabled determines whether ANSI color codes should be emitted.
+// The function respects the NO_COLOR and FORCE_COLOR environment variables,
+// with NO_COLOR taking precedence. When neither is set, TTY detection is
+// used to determine output capabilities.
+func colorsEnabled() bool {
+	if v, ok := os.LookupEnv("NO_COLOR"); ok && v != "" {
+		return false
+	}
+
+	if v, ok := os.LookupEnv("FORCE_COLOR"); ok && v != "" {
+		if v == "0" || strings.EqualFold(v, "false") {
+			return false
+		}
+
+		return true
+	}
+
+	return isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())
+}
+
 // symbol returns the single-character marker used in the diff listing for
-// each status.
-func (s ResultStatus) symbol() string {
+// each status. When colored is true, the marker is wrapped in ANSI color
+// codes.
+func (s ResultStatus) symbol(colored bool) string {
+	if !colored {
+		return s.plainSymbol()
+	}
+
+	switch s {
+	case StatusAdded:
+		return "\033[32m+\033[0m"
+	case StatusModified:
+		return "\033[33m~\033[0m"
+	case StatusUpdated:
+		return "\033[33m*\033[0m"
+	case StatusDeleted:
+		return "\033[31m-\033[0m"
+	case StatusDownloaded:
+		return "\033[36m>\033[0m"
+	case StatusRedirected:
+		return "\033[36m→\033[0m"
+	default:
+		return " "
+	}
+}
+
+// plainSymbol returns the uncolored marker for the status.
+func (s ResultStatus) plainSymbol() string {
 	switch s {
 	case StatusAdded:
 		return "+"
@@ -107,13 +154,16 @@ func (s ResultStatus) symbol() string {
 // results are only counted to keep memory bounded on large syncs, while
 // every other outcome is retained for the diff listing.
 type resultCollector struct {
-	mu      sync.Mutex
-	changed []JobResult
-	skipped atomic.Int64
+	mu           sync.Mutex
+	changed      []JobResult
+	skipped      atomic.Int64
+	outputWriter io.Writer
 }
 
 func newResultCollector() *resultCollector {
-	return &resultCollector{}
+	return &resultCollector{
+		outputWriter: os.Stdout,
+	}
 }
 
 func (c *resultCollector) add(results ...JobResult) {
@@ -175,10 +225,14 @@ func (c *resultCollector) sortedChanged() []JobResult {
 // summary line, so callers can either log or test the output without being
 // coupled to zerolog.
 func (c *resultCollector) render(action S3Action) []string {
+	return c.renderColored(action, colorsEnabled())
+}
+
+func (c *resultCollector) renderColored(action S3Action, colored bool) []string {
 	lines := make([]string, 0)
 
 	for _, r := range c.sortedChanged() {
-		lines = append(lines, fmt.Sprintf("%s %s", r.Status.symbol(), r.Path))
+		lines = append(lines, fmt.Sprintf("%s %s", r.Status.symbol(colored), r.Path))
 	}
 
 	lines = append(lines, fmt.Sprintf("%s summary: %s", action, c.summary()))
@@ -188,6 +242,6 @@ func (c *resultCollector) render(action S3Action) []string {
 
 func (c *resultCollector) log(action S3Action) {
 	for _, line := range c.render(action) {
-		log.Info().Msg(line)
+		fmt.Fprintln(c.outputWriter, line)
 	}
 }
