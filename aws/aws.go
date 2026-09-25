@@ -66,17 +66,7 @@ func NewClient(
 	cf := cloudfront.NewFromConfig(cfg)
 
 	return &Client{
-		S3:         &S3{client: c},
-		Cloudfront: &Cloudfront{client: cf},
+		S3:         NewS3(c),
+		Cloudfront: NewCloudfront(cf),
 	}, nil
-}
-
-// NewTestClient constructs a Client wired to the provided mock S3 and CloudFront
-// clients. It is intended for tests of downstream packages that need to inject
-// mock API clients without going through the real AWS configuration loader.
-func NewTestClient(s3Client S3APIClient, cfClient CloudfrontAPIClient) *Client {
-	return &Client{
-		S3:         &S3{client: s3Client},
-		Cloudfront: &Cloudfront{client: cfClient},
-	}
 }

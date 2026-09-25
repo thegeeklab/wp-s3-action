@@ -28,7 +28,10 @@ func newMockClient(t *testing.T) (*aws.Client, *mocks.MockS3APIClient, *mocks.Mo
 	mockS3 := mocks.NewMockS3APIClient(t)
 	mockCf := mocks.NewMockCloudfrontAPIClient(t)
 
-	return aws.NewTestClient(mockS3, mockCf), mockS3, mockCf
+	return &aws.Client{
+		S3:         aws.NewS3(mockS3),
+		Cloudfront: aws.NewCloudfront(mockCf),
+	}, mockS3, mockCf
 }
 
 func newTestPlugin(ctx context.Context, s *Settings) (*Plugin, plugin_base.Network) {
@@ -37,7 +40,6 @@ func newTestPlugin(ctx context.Context, s *Settings) (*Plugin, plugin_base.Netwo
 	}
 
 	return &Plugin{
-		Plugin:   plugin_base.New(plugin_base.Options{}),
 		Settings: s,
 	}, plugin_base.Network{Context: ctx}
 }
@@ -183,7 +185,7 @@ func TestHandleDelete(t *testing.T) {
 
 			p, client, network := tt.setup(t)
 
-			err := p.handleDelete(network, client)
+			err := p.handleDelete(network, client.S3)
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
 
@@ -261,7 +263,7 @@ func TestHandleRedirect(t *testing.T) {
 				Redirects:      tt.redirects,
 			})
 
-			err := p.handleRedirect(network, client)
+			err := p.handleRedirect(network, client.S3)
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
 
@@ -343,7 +345,9 @@ func TestHandleInvalidateCloudFront(t *testing.T) {
 				CloudFront: CloudFront{Distribution: tt.distribution},
 			})
 
-			err := p.handleInvalidateCloudFront(network, client)
+			client.Cloudfront.Distribution = tt.distribution
+
+			err := p.handleInvalidateCloudFront(network, client.Cloudfront)
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
 
@@ -405,7 +409,7 @@ func TestRunActionJobs(t *testing.T) {
 				MaxConcurrency: 1,
 			})
 
-			err := p.runActionJobs(network, client, S3ActionDelete, func(jobs chan<- Job) error {
+			err := p.runActionJobs(network, client.S3, S3ActionDelete, func(jobs chan<- Job) error {
 				return tt.build(t, jobs)
 			})
 
@@ -421,6 +425,137 @@ func TestRunActionJobs(t *testing.T) {
 
 			assert.NoError(t, err)
 			mockS3.AssertNumberOfCalls(t, "DeleteObjects", 1)
+		})
+	}
+}
+
+func TestJobExecute(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		setup     func(t *testing.T) (Job, *Settings)
+		mockSetup func(t *testing.T, mockS3 *mocks.MockS3APIClient)
+		want      []JobResult
+		wantErr   error
+	}{
+		{
+			name: "upload maps added result to the remote path",
+			setup: func(t *testing.T) (Job, *Settings) {
+				t.Helper()
+
+				source := t.TempDir()
+				require.NoError(t, os.WriteFile(filepath.Join(source, "a.txt"), []byte("a"), 0o600))
+
+				return Job{
+					local:  filepath.Join(source, "a.txt"),
+					remote: "blog/a.txt",
+					action: S3ActionUpload,
+				}, &Settings{}
+			},
+			mockSetup: func(t *testing.T, mockS3 *mocks.MockS3APIClient) {
+				t.Helper()
+
+				mockS3.On("HeadObject", mock.Anything, mock.Anything).Return(&s3.HeadObjectOutput{}, &types.NotFound{})
+				mockS3.On("PutObject", mock.Anything, mock.Anything).Return(&s3.PutObjectOutput{}, nil)
+			},
+			want: []JobResult{{Status: StatusAdded, Path: "blog/a.txt"}},
+		},
+		{
+			name: "download maps to the downloaded status",
+			setup: func(t *testing.T) (Job, *Settings) {
+				t.Helper()
+
+				source := t.TempDir()
+
+				return Job{
+					local:  filepath.Join(source, "a.txt"),
+					remote: "blog/a.txt",
+					action: S3ActionDownload,
+				}, &Settings{Source: source}
+			},
+			mockSetup: func(t *testing.T, mockS3 *mocks.MockS3APIClient) {
+				t.Helper()
+
+				mockS3.On("GetObject", mock.Anything, mock.Anything).
+					Return(func(_ context.Context, _ *s3.GetObjectInput, _ ...func(*s3.Options)) *s3.GetObjectOutput {
+						return &s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("body"))}
+					}, nil)
+			},
+			want: []JobResult{{Status: StatusDownloaded, Path: "blog/a.txt"}},
+		},
+		{
+			name: "redirect maps to the target and location",
+			setup: func(t *testing.T) (Job, *Settings) {
+				t.Helper()
+
+				return Job{
+					local:  "blog/old",
+					remote: "https://example.com/new",
+					action: S3ActionRedirect,
+				}, &Settings{}
+			},
+			mockSetup: func(t *testing.T, mockS3 *mocks.MockS3APIClient) {
+				t.Helper()
+
+				mockS3.On("PutObject", mock.Anything, mock.Anything).Return(&s3.PutObjectOutput{}, nil)
+			},
+			want: []JobResult{{Status: StatusRedirected, Path: "blog/old -> https://example.com/new"}},
+		},
+		{
+			name: "delete maps one result per remote key",
+			setup: func(t *testing.T) (Job, *Settings) {
+				t.Helper()
+
+				return Job{
+					remoteSet: []string{"a.txt", "b.txt"},
+					action:    S3ActionDelete,
+				}, &Settings{}
+			},
+			mockSetup: func(t *testing.T, mockS3 *mocks.MockS3APIClient) {
+				t.Helper()
+
+				mockS3.On("DeleteObjects", mock.Anything, mock.Anything).Return(&s3.DeleteObjectsOutput{}, nil)
+			},
+			want: []JobResult{
+				{Status: StatusDeleted, Path: "a.txt"},
+				{Status: StatusDeleted, Path: "b.txt"},
+			},
+		},
+		{
+			name: "unknown action fails without touching the client",
+			setup: func(t *testing.T) (Job, *Settings) {
+				t.Helper()
+
+				return Job{action: S3Action("bogus")}, &Settings{}
+			},
+			mockSetup: func(t *testing.T, mockS3 *mocks.MockS3APIClient) {
+				t.Helper()
+
+				mockS3.AssertNotCalled(t, "HeadObject", mock.Anything, mock.Anything)
+			},
+			wantErr: ErrActionUnknown,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			client, mockS3, _ := newMockClient(t)
+			tt.mockSetup(t, mockS3)
+
+			job, settings := tt.setup(t)
+
+			got, err := job.execute(t.Context(), client.S3, settings)
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -671,7 +806,7 @@ func TestCreateMirrorDeleteJobs(t *testing.T) {
 				Redirects: tt.redirects,
 			})
 
-			err := p.createMirrorDeleteJobs(t.Context(), client, append([]string{}, tt.local...), func(j Job) error {
+			err := p.createMirrorDeleteJobs(t.Context(), client.S3, append([]string{}, tt.local...), func(j Job) error {
 				collected = append(collected, j)
 
 				return nil
@@ -752,7 +887,7 @@ func TestHandleDownload(t *testing.T) {
 
 			p, client, network := tt.setup(t)
 
-			err := p.handleDownload(network, client)
+			err := p.handleDownload(network, client.S3)
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
 
@@ -784,7 +919,7 @@ func TestHandleDownloadFiltersSiblingKeys(t *testing.T) {
 		MaxConcurrency: 1,
 	})
 
-	err := p.handleDownload(network, client)
+	err := p.handleDownload(network, client.S3)
 	assert.NoError(t, err)
 	mockS3.AssertExpectations(t)
 }
@@ -847,7 +982,7 @@ func TestHandleUpload(t *testing.T) {
 
 			p, client, network := tt.setup(t)
 
-			err := p.handleUpload(network, client)
+			err := p.handleUpload(network, client.S3)
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
 

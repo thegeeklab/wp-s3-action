@@ -122,27 +122,28 @@ func (p *Plugin) Execute() error {
 
 	client.S3.Bucket = p.Settings.Bucket
 	client.S3.DryRun = p.Settings.DryRun
+	client.Cloudfront.Distribution = p.Settings.CloudFront.Distribution
 
 	for _, action := range p.Settings.Action {
 		switch action {
 		case S3ActionUpload:
-			if err := p.handleUpload(network, client); err != nil {
+			if err := p.handleUpload(network, client.S3); err != nil {
 				return err
 			}
 		case S3ActionDownload:
-			if err := p.handleDownload(network, client); err != nil {
+			if err := p.handleDownload(network, client.S3); err != nil {
 				return err
 			}
 		case S3ActionDelete:
-			if err := p.handleDelete(network, client); err != nil {
+			if err := p.handleDelete(network, client.S3); err != nil {
 				return err
 			}
 		case S3ActionRedirect:
-			if err := p.handleRedirect(network, client); err != nil {
+			if err := p.handleRedirect(network, client.S3); err != nil {
 				return err
 			}
 		case S3ActionInvalidateCloudFront:
-			if err := p.handleInvalidateCloudFront(network, client); err != nil {
+			if err := p.handleInvalidateCloudFront(network, client.Cloudfront); err != nil {
 				return err
 			}
 		}
@@ -151,8 +152,8 @@ func (p *Plugin) Execute() error {
 	return nil
 }
 
-func (p *Plugin) handleUpload(network plugin_base.Network, client *aws.Client) error {
-	return p.runActionJobs(network, client, S3ActionUpload, func(jobs chan<- Job) error {
+func (p *Plugin) handleUpload(network plugin_base.Network, s3 S3Runner) error {
+	return p.runActionJobs(network, s3, S3ActionUpload, func(jobs chan<- Job) error {
 		if err := p.validateSource(); err != nil {
 			return err
 		}
@@ -165,7 +166,7 @@ func (p *Plugin) handleUpload(network plugin_base.Network, client *aws.Client) e
 		}
 
 		if p.Settings.Upload.Delete {
-			if err := p.createMirrorDeleteJobs(network.Context, client, local, yield); err != nil {
+			if err := p.createMirrorDeleteJobs(network.Context, s3, local, yield); err != nil {
 				return err
 			}
 		}
@@ -174,15 +175,15 @@ func (p *Plugin) handleUpload(network plugin_base.Network, client *aws.Client) e
 	})
 }
 
-func (p *Plugin) handleDownload(network plugin_base.Network, client *aws.Client) error {
+func (p *Plugin) handleDownload(network plugin_base.Network, s3 S3Runner) error {
 	if err := os.MkdirAll(p.Settings.Source, 0o755); err != nil {
 		return fmt.Errorf("create source directory: %w", err)
 	}
 
-	return p.runActionJobs(network, client, S3ActionDownload, func(jobs chan<- Job) error {
+	return p.runActionJobs(network, s3, S3ActionDownload, func(jobs chan<- Job) error {
 		yield := jobChannelYield(network.Context, jobs)
 
-		return client.S3.List(network.Context, aws.S3ListOptions{Path: p.Settings.Target}, func(remoteKey string) error {
+		return s3.List(network.Context, aws.S3ListOptions{Path: p.Settings.Target}, func(remoteKey string) error {
 			if !withinTarget(remoteKey, p.Settings.Target) {
 				return nil
 			}
@@ -197,8 +198,8 @@ func (p *Plugin) handleDownload(network plugin_base.Network, client *aws.Client)
 	})
 }
 
-func (p *Plugin) handleDelete(network plugin_base.Network, client *aws.Client) error {
-	return p.runActionJobs(network, client, S3ActionDelete, func(jobs chan<- Job) error {
+func (p *Plugin) handleDelete(network plugin_base.Network, s3 S3Runner) error {
+	return p.runActionJobs(network, s3, S3ActionDelete, func(jobs chan<- Job) error {
 		yield := jobChannelYield(network.Context, jobs)
 		batch := make([]string, 0, aws.MaxDeleteBatch)
 
@@ -206,7 +207,7 @@ func (p *Plugin) handleDelete(network plugin_base.Network, client *aws.Client) e
 			return emitDeleteBatch(&batch, yield)
 		}
 
-		err := client.S3.List(network.Context, aws.S3ListOptions{Path: p.Settings.Target}, func(remoteKey string) error {
+		err := s3.List(network.Context, aws.S3ListOptions{Path: p.Settings.Target}, func(remoteKey string) error {
 			if !withinTarget(remoteKey, p.Settings.Target) {
 				return nil
 			}
@@ -226,8 +227,8 @@ func (p *Plugin) handleDelete(network plugin_base.Network, client *aws.Client) e
 	})
 }
 
-func (p *Plugin) handleRedirect(network plugin_base.Network, client *aws.Client) error {
-	return p.runActionJobs(network, client, S3ActionRedirect, func(jobs chan<- Job) error {
+func (p *Plugin) handleRedirect(network plugin_base.Network, s3 S3Runner) error {
+	return p.runActionJobs(network, s3, S3ActionRedirect, func(jobs chan<- Job) error {
 		yield := jobChannelYield(network.Context, jobs)
 
 		for path, location := range p.Settings.Redirects {
@@ -252,7 +253,7 @@ func (p *Plugin) handleRedirect(network plugin_base.Network, client *aws.Client)
 // callback closes the channel when it has finished emitting jobs.
 func (p *Plugin) runActionJobs(
 	network plugin_base.Network,
-	client *aws.Client,
+	s3 S3Runner,
 	action S3Action,
 	build func(chan<- Job) error,
 ) error {
@@ -265,7 +266,7 @@ func (p *Plugin) runActionJobs(
 		buildErr <- build(jobs)
 	}()
 
-	if err := p.runJobs(network.Context, client, jobs); err != nil {
+	if err := p.runJobs(network.Context, s3, action, jobs); err != nil {
 		<-buildErr
 
 		return fmt.Errorf("error while running %s jobs: %w", action, err)
@@ -278,16 +279,14 @@ func (p *Plugin) runActionJobs(
 	return nil
 }
 
-func (p *Plugin) handleInvalidateCloudFront(network plugin_base.Network, client *aws.Client) error {
+func (p *Plugin) handleInvalidateCloudFront(network plugin_base.Network, cf CloudfrontRunner) error {
 	if p.Settings.DryRun {
 		log.Debug().Msgf("dry run: skipping cloudfront invalidation of '/%s/*'", p.Settings.Target)
 
 		return nil
 	}
 
-	client.Cloudfront.Distribution = p.Settings.CloudFront.Distribution
-
-	if err := client.Cloudfront.Invalidate(network.Context, aws.CloudfrontInvalidateOptions{
+	if err := cf.Invalidate(network.Context, aws.CloudfrontInvalidateOptions{
 		Path: path.Join("/", p.Settings.Target, "*"),
 	}); err != nil {
 		return fmt.Errorf("error while invalidating cloudfront distribution: %w", err)
@@ -340,7 +339,7 @@ func (p *Plugin) createUploadJobs(yield func(Job) error) ([]string, error) {
 
 func (p *Plugin) createMirrorDeleteJobs(
 	ctx context.Context,
-	client *aws.Client,
+	s3 S3Runner,
 	local []string,
 	yield func(Job) error,
 ) error {
@@ -359,7 +358,7 @@ func (p *Plugin) createMirrorDeleteJobs(
 		return emitDeleteBatch(&batch, yield)
 	}
 
-	err := client.S3.List(ctx, aws.S3ListOptions{Path: p.Settings.Target}, func(remoteKey string) error {
+	err := s3.List(ctx, aws.S3ListOptions{Path: p.Settings.Target}, func(remoteKey string) error {
 		if !withinTarget(remoteKey, p.Settings.Target) {
 			return nil
 		}
@@ -382,10 +381,12 @@ func (p *Plugin) createMirrorDeleteJobs(
 	return emit()
 }
 
-func (p *Plugin) runJobs(ctx context.Context, client *aws.Client, jobs <-chan Job) error {
+func (p *Plugin) runJobs(ctx context.Context, s3 S3Runner, action S3Action, jobs <-chan Job) error {
 	jobSem := make(chan struct{}, p.Settings.MaxConcurrency)
 
 	log.Info().Msgf("Processing bucket '%s'", p.Settings.Bucket)
+
+	collector := newResultCollector()
 
 	var wg sync.WaitGroup
 
@@ -413,9 +414,14 @@ func (p *Plugin) runJobs(ctx context.Context, client *aws.Client, jobs <-chan Jo
 			defer wg.Done()
 			defer func() { <-jobSem }()
 
-			if err := job.execute(ctx, client, p.Settings); err != nil {
+			results, err := job.execute(ctx, s3, p.Settings)
+			if err != nil {
 				setErr(err)
+
+				return
 			}
+
+			collector.add(results...)
 		}(job)
 	}
 
@@ -425,14 +431,17 @@ func (p *Plugin) runJobs(ctx context.Context, client *aws.Client, jobs <-chan Jo
 	case err := <-firstErr:
 		return fmt.Errorf("job failed: %w", err)
 	default:
-		return nil
 	}
+
+	collector.log(action)
+
+	return nil
 }
 
-func (j Job) execute(ctx context.Context, client *aws.Client, settings *Settings) error {
+func (j Job) execute(ctx context.Context, s3 S3Runner, settings *Settings) ([]JobResult, error) {
 	switch j.action {
 	case S3ActionUpload:
-		return client.S3.Upload(ctx, aws.S3UploadOptions{
+		result, err := s3.Upload(ctx, aws.S3UploadOptions{
 			LocalFilePath:   j.local,
 			RemoteObjectKey: j.remote,
 			ACL:             settings.Upload.ACL,
@@ -441,21 +450,56 @@ func (j Job) execute(ctx context.Context, client *aws.Client, settings *Settings
 			CacheControl:    settings.Upload.CacheControl,
 			Metadata:        settings.Upload.Metadata,
 		})
+		if err != nil {
+			return nil, err
+		}
+
+		return []JobResult{{Status: uploadResultStatus(result), Path: j.remote}}, nil
 	case S3ActionDownload:
-		return client.S3.Download(ctx, aws.S3DownloadOptions{
+		if err := s3.Download(ctx, aws.S3DownloadOptions{
 			LocalRoot:       settings.Source,
 			LocalFilePath:   j.local,
 			RemoteObjectKey: j.remote,
-		})
+		}); err != nil {
+			return nil, err
+		}
+
+		return []JobResult{{Status: StatusDownloaded, Path: j.remote}}, nil
 	case S3ActionRedirect:
-		return client.S3.Redirect(ctx, aws.S3RedirectOptions{
+		if err := s3.Redirect(ctx, aws.S3RedirectOptions{
 			Path:     j.local,
 			Location: j.remote,
-		})
+		}); err != nil {
+			return nil, err
+		}
+
+		return []JobResult{{Status: StatusRedirected, Path: fmt.Sprintf("%s -> %s", j.local, j.remote)}}, nil
 	case S3ActionDelete:
-		return client.S3.Delete(ctx, aws.S3DeleteOptions{RemoteObjectKeys: j.remoteSet})
+		if err := s3.Delete(ctx, aws.S3DeleteOptions{RemoteObjectKeys: j.remoteSet}); err != nil {
+			return nil, err
+		}
+
+		results := make([]JobResult, 0, len(j.remoteSet))
+		for _, key := range j.remoteSet {
+			results = append(results, JobResult{Status: StatusDeleted, Path: key})
+		}
+
+		return results, nil
 	default:
-		return fmt.Errorf("%w: %s", ErrActionUnknown, j.action)
+		return nil, fmt.Errorf("%w: %s", ErrActionUnknown, j.action)
+	}
+}
+
+func uploadResultStatus(result aws.UploadResult) ResultStatus {
+	switch result {
+	case aws.UploadResultAdded:
+		return StatusAdded
+	case aws.UploadResultModified:
+		return StatusModified
+	case aws.UploadResultUpdated:
+		return StatusUpdated
+	default:
+		return StatusSkipped
 	}
 }
 
