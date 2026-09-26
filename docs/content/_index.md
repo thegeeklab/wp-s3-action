@@ -109,7 +109,7 @@ All `map` parameters can be specified as `map` for a subset of files or as `stri
 
 #### Cache a Go build
 
-The plugin can be used to cache the Go module and build cache between pipeline runs. Store the cache in a workspace directory and restore it before the build, then persist it again afterwards:
+The Go build cache (`GOCACHE`) consists of thousands of small files. Transferring it object-by-object is slow and generates many S3 requests, so use archive mode to store the whole directory as a single compressed object. Archive mode also preserves symlinks and hard links, which the per-file `download` action does not, so it is safe for the module cache (`GOMODCACHE`) as well.
 
 ```YAML
 steps:
@@ -118,18 +118,18 @@ steps:
     settings:
       action:
         - download
+      archive: true
       access_key: randomstring
       secret_key: random-secret
       region: us-east-1
       bucket: my-cache-bucket
-      source: .cache/go
-      target: cache/go
+      source: .cache/go-build
+      target: cache/go-build.tar.gz
 
   - name: build
     image: docker.io/library/golang:1.27
     commands:
-      - export GOMODCACHE="$CI_WORKSPACE/.cache/go/mod"
-      - export GOCACHE="$CI_WORKSPACE/.cache/go/build"
+      - export GOCACHE="$CI_WORKSPACE/.cache/go-build"
       - go build ./...
 
   - name: save-cache
@@ -137,15 +137,16 @@ steps:
     settings:
       action:
         - upload
+      archive: true
       access_key: randomstring
       secret_key: random-secret
       region: us-east-1
       bucket: my-cache-bucket
-      source: .cache/go
-      target: cache/go
+      source: .cache/go-build
+      target: cache/go-build.tar.gz
 ```
 
-The `download` action restores the objects stored under the `cache/go` prefix into the workspace. On the first run the prefix does not exist, so the step is a no-op. After the build, the `upload` action writes the populated cache directory back to the same prefix. Only files whose content changed are uploaded, so saving the cache is cheap. Use separate `target` prefixes to keep multiple caches apart, for example one per Go version or branch.
+In archive mode `target` is the full object key rather than a key prefix. Restore and save are each a single GET/PUT of the compressed archive instead of one request per file. On the first run the object does not exist, so the `download` step is a no-op. Use distinct `target` keys to keep multiple caches apart, for example one per Go version or branch. The default compression is `gzip`; set `archive_compression: none` to store an uncompressed tar instead.
 
 #### Sync to a self-hosted S3 server
 

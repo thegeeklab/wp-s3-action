@@ -1,6 +1,7 @@
 package aws
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"os"
@@ -23,7 +24,6 @@ var (
 	ErrListObjects  = errors.New("list objects failed")
 	ErrGetObject    = errors.New("get object failed")
 	ErrCloseFile    = errors.New("close file failed")
-	errAny          = errors.New("any error")
 	errMockAbort    = errors.New("abort iteration")
 )
 
@@ -101,7 +101,7 @@ func TestS3_Upload(t *testing.T) {
 						LocalFilePath: "/path/to/non-existent/file",
 					}, func() {}
 			},
-			wantErr: errAny,
+			wantErr: os.ErrNotExist,
 		},
 		{
 			name: "upload new file with default acl and content type",
@@ -297,7 +297,7 @@ func TestS3_Upload(t *testing.T) {
 
 			result, err := svc.Upload(t.Context(), opt)
 			if tt.wantErr != nil {
-				assert.Error(t, err)
+				assert.ErrorIs(t, err, tt.wantErr)
 
 				return
 			}
@@ -388,7 +388,7 @@ func TestS3_Redirect(t *testing.T) {
 					mockS3Client.AssertExpectations(t)
 				}
 			},
-			wantErr: errAny,
+			wantErr: ErrPutObject,
 		},
 	}
 
@@ -401,7 +401,7 @@ func TestS3_Redirect(t *testing.T) {
 
 			err := svc.Redirect(t.Context(), opt)
 			if tt.wantErr != nil {
-				assert.Error(t, err)
+				assert.ErrorIs(t, err, tt.wantErr)
 
 				return
 			}
@@ -492,7 +492,7 @@ func TestS3_Delete(t *testing.T) {
 					S3DeleteOptions{RemoteObjectKeys: []string{"a.txt"}},
 					func() {}
 			},
-			wantErr: errAny,
+			wantErr: ErrDeleteObject,
 		},
 		{
 			name: "surfaces per-key delete failures from the response body",
@@ -537,7 +537,7 @@ func TestS3_Delete(t *testing.T) {
 
 			err := svc.Delete(t.Context(), opt)
 			if tt.wantErr != nil {
-				assert.Error(t, err)
+				assert.ErrorIs(t, err, tt.wantErr)
 
 				for _, want := range tt.wantErrContains {
 					assert.Contains(t, err.Error(), want)
@@ -653,7 +653,7 @@ func TestS3_Download(t *testing.T) {
 						mockS3Client.AssertExpectations(t)
 					}
 			},
-			wantErr: errAny,
+			wantErr: ErrGetObject,
 		},
 		{
 			name: "error when closing local file fails",
@@ -680,7 +680,7 @@ func TestS3_Download(t *testing.T) {
 						mockS3Client.AssertExpectations(t)
 					}
 			},
-			wantErr: errAny,
+			wantErr: ErrCloseFile,
 		},
 		{
 			name: "reject empty local file path",
@@ -700,7 +700,7 @@ func TestS3_Download(t *testing.T) {
 					},
 					func() {}
 			},
-			wantErr: errAny,
+			wantErr: ErrEmptyLocalFilePath,
 		},
 		{
 			name: "preserve existing file when body read fails",
@@ -732,7 +732,7 @@ func TestS3_Download(t *testing.T) {
 						assert.Equal(t, original, got)
 					}
 			},
-			wantErr: errAny,
+			wantErr: ErrGetObject,
 		},
 		{
 			name: "reject download when intermediate is a symlink that escapes LocalRoot",
@@ -803,7 +803,7 @@ func TestS3_Download(t *testing.T) {
 
 			err := svc.Download(t.Context(), opt)
 			if tt.wantErr != nil {
-				assert.Error(t, err)
+				assert.ErrorIs(t, err, tt.wantErr)
 
 				return
 			}
@@ -820,8 +820,8 @@ func TestS3_List(t *testing.T) {
 		name    string
 		setup   func(t *testing.T) (*S3, S3ListOptions, func())
 		abortOn string // empty means never abort
-		wantErr error
 		want    []string
+		wantErr error
 	}{
 		{
 			name: "list objects in prefix",
@@ -915,8 +915,8 @@ func TestS3_List(t *testing.T) {
 					}
 			},
 			abortOn: "a",
-			wantErr: errMockAbort,
 			want:    []string{"a"},
+			wantErr: errMockAbort,
 		},
 		{
 			name: "propagates list errors",
@@ -1201,6 +1201,245 @@ func TestS3_UploadCopySourceEncoding(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantCopySource, copySource)
+		})
+	}
+}
+
+func TestS3_UploadStream(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) (*S3, S3UploadStreamOptions, func())
+		wantErr error
+	}{
+		{
+			name: "upload object body with content type",
+			setup: func(t *testing.T) (*S3, S3UploadStreamOptions, func()) {
+				t.Helper()
+
+				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.On("PutObject", mock.Anything, mock.MatchedBy(func(input *s3.PutObjectInput) bool {
+					return aws.ToString(input.Key) == "cache/archive.tar.gz" &&
+						aws.ToString(input.ContentType) == "application/gzip"
+				}), mock.Anything, mock.Anything).Return(&s3.PutObjectOutput{}, nil).Once()
+
+				return &S3{client: mockS3Client, Bucket: "test-bucket"},
+					S3UploadStreamOptions{
+						RemoteObjectKey: "cache/archive.tar.gz",
+						Body:            strings.NewReader("data"),
+						ContentType:     "application/gzip",
+					},
+					func() {
+						mockS3Client.AssertExpectations(t)
+					}
+			},
+		},
+		{
+			name: "skip upload when key is empty",
+			setup: func(t *testing.T) (*S3, S3UploadStreamOptions, func()) {
+				t.Helper()
+
+				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.AssertNotCalled(t, "PutObject", mock.Anything, mock.Anything)
+
+				return &S3{client: mockS3Client, Bucket: "test-bucket"},
+					S3UploadStreamOptions{RemoteObjectKey: "", Body: strings.NewReader("data")},
+					func() {}
+			},
+		},
+		{
+			name: "skip upload when dry run is true",
+			setup: func(t *testing.T) (*S3, S3UploadStreamOptions, func()) {
+				t.Helper()
+
+				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.AssertNotCalled(t, "PutObject", mock.Anything, mock.Anything)
+
+				return &S3{client: mockS3Client, Bucket: "test-bucket", DryRun: true},
+					S3UploadStreamOptions{RemoteObjectKey: "cache/archive.tar.gz", Body: strings.NewReader("data")},
+					func() {}
+			},
+		},
+		{
+			name: "error when put object fails",
+			setup: func(t *testing.T) (*S3, S3UploadStreamOptions, func()) {
+				t.Helper()
+
+				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.On("PutObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(&s3.PutObjectOutput{}, ErrPutObject)
+
+				return &S3{client: mockS3Client, Bucket: "test-bucket"},
+					S3UploadStreamOptions{RemoteObjectKey: "cache/archive.tar.gz", Body: strings.NewReader("data")},
+					func() {}
+			},
+			wantErr: ErrPutObject,
+		},
+		{
+			name: "multipart upload for large body",
+			setup: func(t *testing.T) (*S3, S3UploadStreamOptions, func()) {
+				t.Helper()
+
+				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.On("CreateMultipartUpload", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+					Return(&s3.CreateMultipartUploadOutput{UploadId: aws.String("upload-id")}, nil).Once()
+				mockS3Client.On("UploadPart", mock.Anything, mock.Anything, mock.Anything).
+					Return(&s3.UploadPartOutput{ETag: aws.String("etag")}, nil)
+				mockS3Client.On("CompleteMultipartUpload", mock.Anything, mock.Anything, mock.Anything).
+					Return(&s3.CompleteMultipartUploadOutput{}, nil).Once()
+
+				return &S3{client: mockS3Client, Bucket: "test-bucket"},
+					S3UploadStreamOptions{
+						RemoteObjectKey: "cache/archive.tar.gz",
+						Body:            bytes.NewReader(make([]byte, 16*1024*1024+1)),
+						ContentType:     "application/gzip",
+					},
+					func() {
+						mockS3Client.AssertExpectations(t)
+					}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc, opt, teardown := tt.setup(t)
+			defer teardown()
+
+			err := svc.UploadStream(t.Context(), opt)
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+
+				return
+			}
+
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestS3_DownloadStream(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) (*S3, S3DownloadStreamOptions, func())
+		want    string
+		wantErr error
+	}{
+		{
+			name: "write object body to writer",
+			setup: func(t *testing.T) (*S3, S3DownloadStreamOptions, func()) {
+				t.Helper()
+
+				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.On("GetObject", mock.Anything, mock.MatchedBy(func(input *s3.GetObjectInput) bool {
+					return aws.ToString(input.Key) == "cache/archive.tar.gz"
+				})).Return(&s3.GetObjectOutput{
+					Body: io.NopCloser(strings.NewReader("data")),
+				}, nil).Once()
+
+				return &S3{client: mockS3Client, Bucket: "test-bucket"},
+					S3DownloadStreamOptions{RemoteObjectKey: "cache/archive.tar.gz"},
+					func() {
+						mockS3Client.AssertExpectations(t)
+					}
+			},
+			want: "data",
+		},
+		{
+			name: "skip download when key is empty",
+			setup: func(t *testing.T) (*S3, S3DownloadStreamOptions, func()) {
+				t.Helper()
+
+				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.AssertNotCalled(t, "GetObject", mock.Anything, mock.Anything)
+
+				return &S3{client: mockS3Client, Bucket: "test-bucket"},
+					S3DownloadStreamOptions{RemoteObjectKey: ""},
+					func() {}
+			},
+		},
+		{
+			name: "skip download when key is a directory marker",
+			setup: func(t *testing.T) (*S3, S3DownloadStreamOptions, func()) {
+				t.Helper()
+
+				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.AssertNotCalled(t, "GetObject", mock.Anything, mock.Anything)
+
+				return &S3{client: mockS3Client, Bucket: "test-bucket"},
+					S3DownloadStreamOptions{RemoteObjectKey: "prefix/dir/"},
+					func() {}
+			},
+		},
+		{
+			name: "skip download when dry run is true",
+			setup: func(t *testing.T) (*S3, S3DownloadStreamOptions, func()) {
+				t.Helper()
+
+				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.AssertNotCalled(t, "GetObject", mock.Anything, mock.Anything)
+
+				return &S3{client: mockS3Client, Bucket: "test-bucket", DryRun: true},
+					S3DownloadStreamOptions{RemoteObjectKey: "cache/archive.tar.gz"},
+					func() {}
+			},
+		},
+		{
+			name: "missing object returns object-not-found",
+			setup: func(t *testing.T) (*S3, S3DownloadStreamOptions, func()) {
+				t.Helper()
+
+				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.On("GetObject", mock.Anything, mock.Anything).
+					Return(&s3.GetObjectOutput{}, &types.NoSuchKey{})
+
+				return &S3{client: mockS3Client, Bucket: "test-bucket"},
+					S3DownloadStreamOptions{RemoteObjectKey: "cache/archive.tar.gz"},
+					func() {
+						mockS3Client.AssertExpectations(t)
+					}
+			},
+			wantErr: ErrObjectNotFound,
+		},
+		{
+			name: "error when get object fails",
+			setup: func(t *testing.T) (*S3, S3DownloadStreamOptions, func()) {
+				t.Helper()
+
+				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.On("GetObject", mock.Anything, mock.Anything).
+					Return(&s3.GetObjectOutput{}, ErrGetObject)
+
+				return &S3{client: mockS3Client, Bucket: "test-bucket"},
+					S3DownloadStreamOptions{RemoteObjectKey: "cache/archive.tar.gz"},
+					func() {}
+			},
+			wantErr: ErrGetObject,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc, opt, teardown := tt.setup(t)
+			defer teardown()
+
+			var buf bytes.Buffer
+
+			err := svc.DownloadStream(t.Context(), opt, &buf)
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.want, buf.String())
 		})
 	}
 }

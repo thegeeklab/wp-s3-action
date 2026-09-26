@@ -22,6 +22,154 @@ func (_m *MockS3APIClient) EXPECT() *MockS3APIClient_Expecter {
 	return &MockS3APIClient_Expecter{mock: &_m.Mock}
 }
 
+// AbortMultipartUpload provides a mock function with given fields: ctx, params, optFns
+func (_m *MockS3APIClient) AbortMultipartUpload(ctx context.Context, params *s3.AbortMultipartUploadInput, optFns ...func(*s3.Options)) (*s3.AbortMultipartUploadOutput, error) {
+	_va := make([]interface{}, len(optFns))
+	for _i := range optFns {
+		_va[_i] = optFns[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, params)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	if len(ret) == 0 {
+		panic("no return value specified for AbortMultipartUpload")
+	}
+
+	var r0 *s3.AbortMultipartUploadOutput
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, *s3.AbortMultipartUploadInput, ...func(*s3.Options)) (*s3.AbortMultipartUploadOutput, error)); ok {
+		return rf(ctx, params, optFns...)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, *s3.AbortMultipartUploadInput, ...func(*s3.Options)) *s3.AbortMultipartUploadOutput); ok {
+		r0 = rf(ctx, params, optFns...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*s3.AbortMultipartUploadOutput)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, *s3.AbortMultipartUploadInput, ...func(*s3.Options)) error); ok {
+		r1 = rf(ctx, params, optFns...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockS3APIClient_AbortMultipartUpload_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'AbortMultipartUpload'
+type MockS3APIClient_AbortMultipartUpload_Call struct {
+	*mock.Call
+}
+
+// AbortMultipartUpload is a helper method to define mock.On call
+//   - ctx context.Context
+//   - params *s3.AbortMultipartUploadInput
+//   - optFns ...func(*s3.Options)
+func (_e *MockS3APIClient_Expecter) AbortMultipartUpload(ctx interface{}, params interface{}, optFns ...interface{}) *MockS3APIClient_AbortMultipartUpload_Call {
+	return &MockS3APIClient_AbortMultipartUpload_Call{Call: _e.mock.On("AbortMultipartUpload",
+		append([]interface{}{ctx, params}, optFns...)...)}
+}
+
+func (_c *MockS3APIClient_AbortMultipartUpload_Call) Run(run func(ctx context.Context, params *s3.AbortMultipartUploadInput, optFns ...func(*s3.Options))) *MockS3APIClient_AbortMultipartUpload_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]func(*s3.Options), len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(func(*s3.Options))
+			}
+		}
+		run(args[0].(context.Context), args[1].(*s3.AbortMultipartUploadInput), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *MockS3APIClient_AbortMultipartUpload_Call) Return(_a0 *s3.AbortMultipartUploadOutput, _a1 error) *MockS3APIClient_AbortMultipartUpload_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockS3APIClient_AbortMultipartUpload_Call) RunAndReturn(run func(context.Context, *s3.AbortMultipartUploadInput, ...func(*s3.Options)) (*s3.AbortMultipartUploadOutput, error)) *MockS3APIClient_AbortMultipartUpload_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// CompleteMultipartUpload provides a mock function with given fields: ctx, params, optFns
+func (_m *MockS3APIClient) CompleteMultipartUpload(ctx context.Context, params *s3.CompleteMultipartUploadInput, optFns ...func(*s3.Options)) (*s3.CompleteMultipartUploadOutput, error) {
+	_va := make([]interface{}, len(optFns))
+	for _i := range optFns {
+		_va[_i] = optFns[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, params)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CompleteMultipartUpload")
+	}
+
+	var r0 *s3.CompleteMultipartUploadOutput
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, *s3.CompleteMultipartUploadInput, ...func(*s3.Options)) (*s3.CompleteMultipartUploadOutput, error)); ok {
+		return rf(ctx, params, optFns...)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, *s3.CompleteMultipartUploadInput, ...func(*s3.Options)) *s3.CompleteMultipartUploadOutput); ok {
+		r0 = rf(ctx, params, optFns...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*s3.CompleteMultipartUploadOutput)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, *s3.CompleteMultipartUploadInput, ...func(*s3.Options)) error); ok {
+		r1 = rf(ctx, params, optFns...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockS3APIClient_CompleteMultipartUpload_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CompleteMultipartUpload'
+type MockS3APIClient_CompleteMultipartUpload_Call struct {
+	*mock.Call
+}
+
+// CompleteMultipartUpload is a helper method to define mock.On call
+//   - ctx context.Context
+//   - params *s3.CompleteMultipartUploadInput
+//   - optFns ...func(*s3.Options)
+func (_e *MockS3APIClient_Expecter) CompleteMultipartUpload(ctx interface{}, params interface{}, optFns ...interface{}) *MockS3APIClient_CompleteMultipartUpload_Call {
+	return &MockS3APIClient_CompleteMultipartUpload_Call{Call: _e.mock.On("CompleteMultipartUpload",
+		append([]interface{}{ctx, params}, optFns...)...)}
+}
+
+func (_c *MockS3APIClient_CompleteMultipartUpload_Call) Run(run func(ctx context.Context, params *s3.CompleteMultipartUploadInput, optFns ...func(*s3.Options))) *MockS3APIClient_CompleteMultipartUpload_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]func(*s3.Options), len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(func(*s3.Options))
+			}
+		}
+		run(args[0].(context.Context), args[1].(*s3.CompleteMultipartUploadInput), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *MockS3APIClient_CompleteMultipartUpload_Call) Return(_a0 *s3.CompleteMultipartUploadOutput, _a1 error) *MockS3APIClient_CompleteMultipartUpload_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockS3APIClient_CompleteMultipartUpload_Call) RunAndReturn(run func(context.Context, *s3.CompleteMultipartUploadInput, ...func(*s3.Options)) (*s3.CompleteMultipartUploadOutput, error)) *MockS3APIClient_CompleteMultipartUpload_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CopyObject provides a mock function with given fields: ctx, params, optFns
 func (_m *MockS3APIClient) CopyObject(ctx context.Context, params *s3.CopyObjectInput, optFns ...func(*s3.Options)) (*s3.CopyObjectOutput, error) {
 	_va := make([]interface{}, len(optFns))
@@ -92,6 +240,80 @@ func (_c *MockS3APIClient_CopyObject_Call) Return(_a0 *s3.CopyObjectOutput, _a1 
 }
 
 func (_c *MockS3APIClient_CopyObject_Call) RunAndReturn(run func(context.Context, *s3.CopyObjectInput, ...func(*s3.Options)) (*s3.CopyObjectOutput, error)) *MockS3APIClient_CopyObject_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// CreateMultipartUpload provides a mock function with given fields: ctx, params, optFns
+func (_m *MockS3APIClient) CreateMultipartUpload(ctx context.Context, params *s3.CreateMultipartUploadInput, optFns ...func(*s3.Options)) (*s3.CreateMultipartUploadOutput, error) {
+	_va := make([]interface{}, len(optFns))
+	for _i := range optFns {
+		_va[_i] = optFns[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, params)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreateMultipartUpload")
+	}
+
+	var r0 *s3.CreateMultipartUploadOutput
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, *s3.CreateMultipartUploadInput, ...func(*s3.Options)) (*s3.CreateMultipartUploadOutput, error)); ok {
+		return rf(ctx, params, optFns...)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, *s3.CreateMultipartUploadInput, ...func(*s3.Options)) *s3.CreateMultipartUploadOutput); ok {
+		r0 = rf(ctx, params, optFns...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*s3.CreateMultipartUploadOutput)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, *s3.CreateMultipartUploadInput, ...func(*s3.Options)) error); ok {
+		r1 = rf(ctx, params, optFns...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockS3APIClient_CreateMultipartUpload_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateMultipartUpload'
+type MockS3APIClient_CreateMultipartUpload_Call struct {
+	*mock.Call
+}
+
+// CreateMultipartUpload is a helper method to define mock.On call
+//   - ctx context.Context
+//   - params *s3.CreateMultipartUploadInput
+//   - optFns ...func(*s3.Options)
+func (_e *MockS3APIClient_Expecter) CreateMultipartUpload(ctx interface{}, params interface{}, optFns ...interface{}) *MockS3APIClient_CreateMultipartUpload_Call {
+	return &MockS3APIClient_CreateMultipartUpload_Call{Call: _e.mock.On("CreateMultipartUpload",
+		append([]interface{}{ctx, params}, optFns...)...)}
+}
+
+func (_c *MockS3APIClient_CreateMultipartUpload_Call) Run(run func(ctx context.Context, params *s3.CreateMultipartUploadInput, optFns ...func(*s3.Options))) *MockS3APIClient_CreateMultipartUpload_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]func(*s3.Options), len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(func(*s3.Options))
+			}
+		}
+		run(args[0].(context.Context), args[1].(*s3.CreateMultipartUploadInput), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *MockS3APIClient_CreateMultipartUpload_Call) Return(_a0 *s3.CreateMultipartUploadOutput, _a1 error) *MockS3APIClient_CreateMultipartUpload_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockS3APIClient_CreateMultipartUpload_Call) RunAndReturn(run func(context.Context, *s3.CreateMultipartUploadInput, ...func(*s3.Options)) (*s3.CreateMultipartUploadOutput, error)) *MockS3APIClient_CreateMultipartUpload_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -466,6 +688,80 @@ func (_c *MockS3APIClient_ListObjects_Call) RunAndReturn(run func(context.Contex
 	return _c
 }
 
+// ListObjectsV2 provides a mock function with given fields: ctx, params, optFns
+func (_m *MockS3APIClient) ListObjectsV2(ctx context.Context, params *s3.ListObjectsV2Input, optFns ...func(*s3.Options)) (*s3.ListObjectsV2Output, error) {
+	_va := make([]interface{}, len(optFns))
+	for _i := range optFns {
+		_va[_i] = optFns[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, params)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListObjectsV2")
+	}
+
+	var r0 *s3.ListObjectsV2Output
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, *s3.ListObjectsV2Input, ...func(*s3.Options)) (*s3.ListObjectsV2Output, error)); ok {
+		return rf(ctx, params, optFns...)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, *s3.ListObjectsV2Input, ...func(*s3.Options)) *s3.ListObjectsV2Output); ok {
+		r0 = rf(ctx, params, optFns...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*s3.ListObjectsV2Output)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, *s3.ListObjectsV2Input, ...func(*s3.Options)) error); ok {
+		r1 = rf(ctx, params, optFns...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockS3APIClient_ListObjectsV2_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListObjectsV2'
+type MockS3APIClient_ListObjectsV2_Call struct {
+	*mock.Call
+}
+
+// ListObjectsV2 is a helper method to define mock.On call
+//   - ctx context.Context
+//   - params *s3.ListObjectsV2Input
+//   - optFns ...func(*s3.Options)
+func (_e *MockS3APIClient_Expecter) ListObjectsV2(ctx interface{}, params interface{}, optFns ...interface{}) *MockS3APIClient_ListObjectsV2_Call {
+	return &MockS3APIClient_ListObjectsV2_Call{Call: _e.mock.On("ListObjectsV2",
+		append([]interface{}{ctx, params}, optFns...)...)}
+}
+
+func (_c *MockS3APIClient_ListObjectsV2_Call) Run(run func(ctx context.Context, params *s3.ListObjectsV2Input, optFns ...func(*s3.Options))) *MockS3APIClient_ListObjectsV2_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]func(*s3.Options), len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(func(*s3.Options))
+			}
+		}
+		run(args[0].(context.Context), args[1].(*s3.ListObjectsV2Input), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *MockS3APIClient_ListObjectsV2_Call) Return(_a0 *s3.ListObjectsV2Output, _a1 error) *MockS3APIClient_ListObjectsV2_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockS3APIClient_ListObjectsV2_Call) RunAndReturn(run func(context.Context, *s3.ListObjectsV2Input, ...func(*s3.Options)) (*s3.ListObjectsV2Output, error)) *MockS3APIClient_ListObjectsV2_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // PutObject provides a mock function with given fields: ctx, params, optFns
 func (_m *MockS3APIClient) PutObject(ctx context.Context, params *s3.PutObjectInput, optFns ...func(*s3.Options)) (*s3.PutObjectOutput, error) {
 	_va := make([]interface{}, len(optFns))
@@ -536,6 +832,80 @@ func (_c *MockS3APIClient_PutObject_Call) Return(_a0 *s3.PutObjectOutput, _a1 er
 }
 
 func (_c *MockS3APIClient_PutObject_Call) RunAndReturn(run func(context.Context, *s3.PutObjectInput, ...func(*s3.Options)) (*s3.PutObjectOutput, error)) *MockS3APIClient_PutObject_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// UploadPart provides a mock function with given fields: ctx, params, optFns
+func (_m *MockS3APIClient) UploadPart(ctx context.Context, params *s3.UploadPartInput, optFns ...func(*s3.Options)) (*s3.UploadPartOutput, error) {
+	_va := make([]interface{}, len(optFns))
+	for _i := range optFns {
+		_va[_i] = optFns[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, params)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UploadPart")
+	}
+
+	var r0 *s3.UploadPartOutput
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, *s3.UploadPartInput, ...func(*s3.Options)) (*s3.UploadPartOutput, error)); ok {
+		return rf(ctx, params, optFns...)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, *s3.UploadPartInput, ...func(*s3.Options)) *s3.UploadPartOutput); ok {
+		r0 = rf(ctx, params, optFns...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*s3.UploadPartOutput)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, *s3.UploadPartInput, ...func(*s3.Options)) error); ok {
+		r1 = rf(ctx, params, optFns...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockS3APIClient_UploadPart_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UploadPart'
+type MockS3APIClient_UploadPart_Call struct {
+	*mock.Call
+}
+
+// UploadPart is a helper method to define mock.On call
+//   - ctx context.Context
+//   - params *s3.UploadPartInput
+//   - optFns ...func(*s3.Options)
+func (_e *MockS3APIClient_Expecter) UploadPart(ctx interface{}, params interface{}, optFns ...interface{}) *MockS3APIClient_UploadPart_Call {
+	return &MockS3APIClient_UploadPart_Call{Call: _e.mock.On("UploadPart",
+		append([]interface{}{ctx, params}, optFns...)...)}
+}
+
+func (_c *MockS3APIClient_UploadPart_Call) Run(run func(ctx context.Context, params *s3.UploadPartInput, optFns ...func(*s3.Options))) *MockS3APIClient_UploadPart_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]func(*s3.Options), len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(func(*s3.Options))
+			}
+		}
+		run(args[0].(context.Context), args[1].(*s3.UploadPartInput), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *MockS3APIClient_UploadPart_Call) Return(_a0 *s3.UploadPartOutput, _a1 error) *MockS3APIClient_UploadPart_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockS3APIClient_UploadPart_Call) RunAndReturn(run func(context.Context, *s3.UploadPartInput, ...func(*s3.Options)) (*s3.UploadPartOutput, error)) *MockS3APIClient_UploadPart_Call {
 	_c.Call.Return(run)
 	return _c
 }

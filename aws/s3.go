@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/rs/zerolog/log"
@@ -35,6 +36,7 @@ var (
 	ErrLocalPathOutsideRoot = errors.New("local path resolves outside configured root")
 	ErrListPagination       = errors.New("invalid s3 list pagination response")
 	ErrPartialDelete        = errors.New("s3 delete objects reported per-key failure")
+	ErrObjectNotFound       = errors.New("object not found")
 )
 
 // MaxDeleteBatch is the maximum number of keys accepted by a single
@@ -68,6 +70,16 @@ type S3DownloadOptions struct {
 
 type S3ListOptions struct {
 	Path string
+}
+
+type S3UploadStreamOptions struct {
+	RemoteObjectKey string
+	Body            io.Reader
+	ContentType     string
+}
+
+type S3DownloadStreamOptions struct {
+	RemoteObjectKey string
 }
 
 // UploadResult describes the outcome of an Upload call. The zero value is
@@ -557,6 +569,76 @@ func (u *S3) Download(ctx context.Context, opt S3DownloadOptions) error {
 
 	if err := os.Rename(tmpPath, opt.LocalFilePath); err != nil {
 		return fmt.Errorf("rename temp file: %w", err)
+	}
+
+	return nil
+}
+
+// UploadStream uploads a single object from a reader. Unlike Upload, it
+// performs no HeadObject/content comparison, which makes it suitable for
+// objects produced at runtime (e.g. archive/cache tarballs) whose content
+// changes on every invocation. It uploads through the S3 transfer manager,
+// which transparently switches from a single PutObject to a multipart upload
+// for bodies larger than the manager's multipart threshold.
+func (u *S3) UploadStream(ctx context.Context, opt S3UploadStreamOptions) error {
+	if opt.RemoteObjectKey == "" {
+		return nil
+	}
+
+	if u.DryRun {
+		log.Debug().Msgf("uploading '%s' (dry run)", opt.RemoteObjectKey)
+
+		return nil
+	}
+
+	_, err := transfermanager.New(u.client).UploadObject(ctx, &transfermanager.UploadObjectInput{
+		Bucket:      aws.String(u.Bucket),
+		Key:         aws.String(opt.RemoteObjectKey),
+		Body:        opt.Body,
+		ContentType: aws.String(opt.ContentType),
+	})
+
+	return err
+}
+
+// DownloadStream writes the body of a single object to w. Like UploadStream,
+// it bypasses the per-file path handling of Download and is intended for
+// objects consumed as a whole.
+func (u *S3) DownloadStream(ctx context.Context, opt S3DownloadStreamOptions, w io.Writer) error {
+	if opt.RemoteObjectKey == "" || strings.HasSuffix(opt.RemoteObjectKey, "/") {
+		return nil
+	}
+
+	if u.DryRun {
+		log.Debug().Msgf("downloading '%s' (dry run)", opt.RemoteObjectKey)
+
+		return nil
+	}
+
+	resp, err := u.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(u.Bucket),
+		Key:    aws.String(opt.RemoteObjectKey),
+	})
+	if err != nil {
+		var noSuchKey *types.NoSuchKey
+		var notFound *types.NotFound
+
+		if errors.As(err, &noSuchKey) || errors.As(err, &notFound) {
+			return fmt.Errorf("%w: %s", ErrObjectNotFound, opt.RemoteObjectKey)
+		}
+
+		return fmt.Errorf("get object: %w", err)
+	}
+
+	defer func() {
+		// drain and close so the underlying TCP connection returns to the
+		// keep-alive pool even on partial reads or errors
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+	}()
+
+	if _, err := io.Copy(w, resp.Body); err != nil {
+		return fmt.Errorf("write object: %w", err)
 	}
 
 	return nil

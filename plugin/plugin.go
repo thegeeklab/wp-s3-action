@@ -6,6 +6,7 @@ import (
 
 	plugin_cli "github.com/thegeeklab/wp-plugin-go/v7/cli"
 	plugin_base "github.com/thegeeklab/wp-plugin-go/v7/plugin"
+	"github.com/thegeeklab/wp-s3-action/archive"
 	"github.com/thegeeklab/wp-s3-action/aws"
 	"github.com/urfave/cli/v3"
 )
@@ -37,6 +38,7 @@ type Settings struct {
 
 	Upload     Upload
 	CloudFront CloudFront
+	Archive    Archive
 }
 
 type Upload struct {
@@ -47,6 +49,11 @@ type Upload struct {
 	ContentEncoding  map[string]string
 	Metadata         map[string]map[string]string
 	AllowEmptySource bool
+}
+
+type Archive struct {
+	Enabled     bool
+	Compression string
 }
 
 type CloudFront struct {
@@ -194,6 +201,39 @@ func Flags(settings *Settings, category string) []cli.Flag {
 			Sources:     cli.EnvVars("PLUGIN_TARGET"),
 			Destination: &settings.Target,
 			Category:    category,
+		},
+		// Enable archive mode for the `upload` and `download` actions. When enabled, the
+		// `source` directory is serialized into a single tar (optionally compressed) object
+		// at the `target` key instead of one object per file. Intended for CI caches with a
+		// large number of small files where per-object transfers are slow and costly.
+		//
+		// In archive mode `target` is interpreted as the full object key rather than a key
+		// prefix, and it must be non-empty for both `upload` and `download`.
+		&cli.BoolFlag{
+			Name:        "archive",
+			Usage:       "enable archive mode for upload/download actions",
+			Sources:     cli.EnvVars("PLUGIN_ARCHIVE"),
+			Destination: &settings.Archive.Enabled,
+			Category:    category,
+		},
+		// Compression algorithm used in archive mode. Supported values are `gzip` and
+		// `none`. `gzip` is the default.
+		&cli.StringFlag{
+			Name: "archive.compression",
+			Usage: fmt.Sprintf(
+				"archive compression algorithm (%s or %s)",
+				archive.CompressionGzip,
+				archive.CompressionNone,
+			),
+			Value:       string(archive.CompressionGzip),
+			Sources:     cli.EnvVars("PLUGIN_ARCHIVE_COMPRESSION"),
+			Destination: &settings.Archive.Compression,
+			Validator: func(s string) error {
+				var compression archive.Compression
+
+				return compression.Set(s)
+			},
+			Category: category,
 		},
 		// Delete remote files that are not present in the local source directory during
 		// upload.

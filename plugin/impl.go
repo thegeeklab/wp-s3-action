@@ -28,6 +28,8 @@ var (
 		"target is required for the download action to avoid pulling the entire bucket",
 	)
 	ErrInvalidMaxConcurrency = errors.New("max-concurrency must be at least 1")
+	ErrArchiveTargetNotSet   = errors.New("target is required for archive upload/download")
+	ErrArchiveUnsupported    = errors.New("archive mode only supports the upload and download actions")
 )
 
 const (
@@ -96,6 +98,22 @@ func (p *Plugin) Validate() error {
 		p.Settings.Action = append(p.Settings.Action, action)
 	}
 
+	if p.Settings.Archive.Enabled {
+		if p.Settings.Target == "" {
+			return ErrArchiveTargetNotSet
+		}
+
+		for _, action := range p.Settings.Action {
+			if action != S3ActionUpload && action != S3ActionDownload {
+				return fmt.Errorf("%w: %s", ErrArchiveUnsupported, action)
+			}
+		}
+
+		if _, err := p.archiveCompression(); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -127,11 +145,25 @@ func (p *Plugin) Execute() error {
 	for _, action := range p.Settings.Action {
 		switch action {
 		case S3ActionUpload:
-			if err := p.handleUpload(network, client.S3); err != nil {
+			var err error
+			if p.Settings.Archive.Enabled {
+				err = p.handleArchiveUpload(network, client.S3)
+			} else {
+				err = p.handleUpload(network, client.S3)
+			}
+
+			if err != nil {
 				return err
 			}
 		case S3ActionDownload:
-			if err := p.handleDownload(network, client.S3); err != nil {
+			var err error
+			if p.Settings.Archive.Enabled {
+				err = p.handleArchiveDownload(network, client.S3)
+			} else {
+				err = p.handleDownload(network, client.S3)
+			}
+
+			if err != nil {
 				return err
 			}
 		case S3ActionDelete:

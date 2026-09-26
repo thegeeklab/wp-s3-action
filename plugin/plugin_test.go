@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/thegeeklab/wp-s3-action/archive"
 	"github.com/thegeeklab/wp-s3-action/aws"
 	"github.com/urfave/cli/v3"
 )
@@ -289,6 +290,59 @@ func TestChecksumCalculationFlag(t *testing.T) {
 	}
 }
 
+func TestArchiveFlag(t *testing.T) {
+	tests := []struct {
+		name            string
+		envs            map[string]string
+		wantEnabled     bool
+		wantCompression string
+		wantErr         error
+	}{
+		{
+			name:            "disabled by default with gzip compression",
+			envs:            map[string]string{},
+			wantEnabled:     false,
+			wantCompression: string(archive.CompressionGzip),
+		},
+		{
+			name:            "enabled via environment",
+			envs:            map[string]string{"PLUGIN_ARCHIVE": "true"},
+			wantEnabled:     true,
+			wantCompression: string(archive.CompressionGzip),
+		},
+		{
+			name:            "compression none",
+			envs:            map[string]string{"PLUGIN_ARCHIVE": "true", "PLUGIN_ARCHIVE_COMPRESSION": "none"},
+			wantEnabled:     true,
+			wantCompression: string(archive.CompressionNone),
+		},
+		{
+			name:    "invalid compression rejected",
+			envs:    map[string]string{"PLUGIN_ARCHIVE_COMPRESSION": "zstd"},
+			wantErr: archive.ErrInvalidCompression,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for key, value := range tt.envs {
+				t.Setenv(key, value)
+			}
+
+			got, err := setupPluginTest(t)
+
+			if tt.wantErr != nil {
+				assert.ErrorAs(t, err, &tt.wantErr)
+
+				return
+			}
+
+			assert.Equal(t, tt.wantEnabled, got.Settings.Archive.Enabled)
+			assert.Equal(t, tt.wantCompression, got.Settings.Archive.Compression)
+		})
+	}
+}
+
 func TestValidate(t *testing.T) {
 	t.Parallel()
 
@@ -352,6 +406,53 @@ func TestValidate(t *testing.T) {
 		{
 			name:     "valid max-concurrency",
 			settings: &Settings{ActionStrings: []string{"upload"}, MaxConcurrency: 4},
+		},
+		{
+			name: "archive upload without target",
+			settings: &Settings{
+				ActionStrings:  []string{"upload"},
+				MaxConcurrency: 1,
+				Archive:        Archive{Enabled: true, Compression: string(archive.CompressionGzip)},
+			},
+			wantErr: ErrArchiveTargetNotSet,
+		},
+		{
+			name: "archive upload with target",
+			settings: &Settings{
+				ActionStrings:  []string{"upload"},
+				Target:         "cache.tar.gz",
+				MaxConcurrency: 1,
+				Archive:        Archive{Enabled: true, Compression: string(archive.CompressionGzip)},
+			},
+		},
+		{
+			name: "archive download with target",
+			settings: &Settings{
+				ActionStrings:  []string{"download"},
+				Target:         "cache.tar.gz",
+				MaxConcurrency: 1,
+				Archive:        Archive{Enabled: true, Compression: string(archive.CompressionGzip)},
+			},
+		},
+		{
+			name: "archive mode rejects non upload/download actions",
+			settings: &Settings{
+				ActionStrings:  []string{"delete"},
+				Target:         "cache.tar.gz",
+				MaxConcurrency: 1,
+				Archive:        Archive{Enabled: true, Compression: string(archive.CompressionGzip)},
+			},
+			wantErr: ErrArchiveUnsupported,
+		},
+		{
+			name: "archive mode rejects invalid compression",
+			settings: &Settings{
+				ActionStrings:  []string{"upload"},
+				Target:         "cache.tar.gz",
+				MaxConcurrency: 1,
+				Archive:        Archive{Enabled: true, Compression: "zstd"},
+			},
+			wantErr: archive.ErrInvalidCompression,
 		},
 	}
 

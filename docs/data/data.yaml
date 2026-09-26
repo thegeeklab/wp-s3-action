@@ -25,6 +25,27 @@ properties:
     type: list
     required: true
 
+  - name: archive
+    description: |
+      Enable archive mode for the `upload` and `download` actions. When enabled, the
+      `source` directory is serialized into a single tar (optionally compressed) object
+      at the `target` key instead of one object per file. Intended for CI caches with a
+      large number of small files where per-object transfers are slow and costly.
+
+      In archive mode `target` is interpreted as the full object key rather than a key
+      prefix, and it must be non-empty for both `upload` and `download`.
+    type: bool
+    defaultValue: false
+    required: false
+
+  - name: archive_compression
+    description: |
+      Compression algorithm used in archive mode. Supported values are `gzip` and
+      `none`. `gzip` is the default.
+    type: string
+    defaultValue: "gzip"
+    required: false
+
   - name: bucket
     description: |
       Name of the bucket.
