@@ -18,7 +18,7 @@ func TestCloudfront_Invalidate(t *testing.T) {
 	tests := []struct {
 		name    string
 		setup   func(t *testing.T) (*Cloudfront, CloudfrontInvalidateOptions, func())
-		wantErr bool
+		wantErr error
 	}{
 		{
 			name: "invalidate path successfully",
@@ -39,7 +39,7 @@ func TestCloudfront_Invalidate(t *testing.T) {
 					mockClient.AssertExpectations(t)
 				}
 			},
-			wantErr: false,
+			wantErr: nil,
 		},
 		{
 			name: "error when create invalidation fails",
@@ -60,7 +60,7 @@ func TestCloudfront_Invalidate(t *testing.T) {
 					mockClient.AssertExpectations(t)
 				}
 			},
-			wantErr: true,
+			wantErr: ErrCreateInvalidation,
 		},
 	}
 
@@ -72,8 +72,8 @@ func TestCloudfront_Invalidate(t *testing.T) {
 			defer teardown()
 
 			err := svc.Invalidate(t.Context(), opt)
-			if tt.wantErr {
-				assert.Error(t, err)
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
 
 				return
 			}

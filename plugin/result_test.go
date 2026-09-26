@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -145,7 +146,61 @@ func TestResultStatusSymbol(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			assert.Equal(t, tt.want, tt.status.symbol())
+			assert.Equal(t, tt.want, tt.status.symbol(false))
+		})
+	}
+}
+
+func TestResultStatusColoredSymbol(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		status ResultStatus
+		want   string
+	}{
+		{
+			name:   "added",
+			status: StatusAdded,
+			want:   "\033[32m+\033[0m",
+		},
+		{
+			name:   "modified",
+			status: StatusModified,
+			want:   "\033[33m~\033[0m",
+		},
+		{
+			name:   "updated",
+			status: StatusUpdated,
+			want:   "\033[33m*\033[0m",
+		},
+		{
+			name:   "deleted",
+			status: StatusDeleted,
+			want:   "\033[31m-\033[0m",
+		},
+		{
+			name:   "downloaded",
+			status: StatusDownloaded,
+			want:   "\033[36m>\033[0m",
+		},
+		{
+			name:   "redirected",
+			status: StatusRedirected,
+			want:   "\033[36m→\033[0m",
+		},
+		{
+			name:   "unknown",
+			status: ResultStatus("bogus"),
+			want:   " ",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, tt.want, tt.status.symbol(true))
 		})
 	}
 }
@@ -201,7 +256,7 @@ func TestResultCollectorRender(t *testing.T) {
 			collector := newResultCollector()
 			collector.add(tt.results...)
 
-			assert.Equal(t, tt.want, collector.render(tt.action))
+			assert.Equal(t, tt.want, collector.renderColored(tt.action, false))
 		})
 	}
 }
@@ -246,6 +301,128 @@ func TestUploadResultStatus(t *testing.T) {
 			t.Parallel()
 
 			assert.Equal(t, tt.want, uploadResultStatus(tt.result))
+		})
+	}
+}
+
+func TestColorsEnabled(t *testing.T) {
+	tests := []struct {
+		name       string
+		setNoColor bool
+		noColor    string
+		setForce   bool
+		forceColor string
+		want       bool
+	}{
+		{
+			name:       "NO_COLOR disables colors",
+			setNoColor: true,
+			noColor:    "1",
+			want:       false,
+		},
+		{
+			name:       "NO_COLOR empty string does not disable colors",
+			setNoColor: true,
+			noColor:    "",
+			setForce:   true,
+			forceColor: "1",
+			want:       true,
+		},
+		{
+			name:       "NO_COLOR takes precedence over FORCE_COLOR",
+			setNoColor: true,
+			noColor:    "1",
+			setForce:   true,
+			forceColor: "1",
+			want:       false,
+		},
+		{
+			name:       "FORCE_COLOR enables colors",
+			setForce:   true,
+			forceColor: "1",
+			want:       true,
+		},
+		{
+			name:       "FORCE_COLOR true enables colors",
+			setForce:   true,
+			forceColor: "true",
+			want:       true,
+		},
+		{
+			name:       "FORCE_COLOR 0 disables colors",
+			setForce:   true,
+			forceColor: "0",
+			want:       false,
+		},
+		{
+			name:       "FORCE_COLOR false disables colors",
+			setForce:   true,
+			forceColor: "false",
+			want:       false,
+		},
+		{
+			name:       "FORCE_COLOR FALSE disables colors case-insensitively",
+			setForce:   true,
+			forceColor: "FALSE",
+			want:       false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.setNoColor {
+				t.Setenv("NO_COLOR", tt.noColor)
+			} else {
+				t.Setenv("NO_COLOR", "")
+			}
+
+			if tt.setForce {
+				t.Setenv("FORCE_COLOR", tt.forceColor)
+			} else {
+				t.Setenv("FORCE_COLOR", "")
+			}
+
+			assert.Equal(t, tt.want, colorsEnabled())
+		})
+	}
+}
+
+func TestResultCollectorLog(t *testing.T) {
+	tests := []struct {
+		name    string
+		results []JobResult
+		action  S3Action
+		want    string
+	}{
+		{
+			name:    "no results writes only the summary",
+			results: nil,
+			action:  S3ActionUpload,
+			want:    "upload summary: no changes\n",
+		},
+		{
+			name: "changed results are written to output writer",
+			results: []JobResult{
+				{Status: StatusAdded, Path: "b.txt"},
+				{Status: StatusDeleted, Path: "a.txt"},
+			},
+			action: S3ActionUpload,
+			want:   "- a.txt\n+ b.txt\nupload summary: 1 added, 1 deleted\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("NO_COLOR", "1")
+
+			var buf bytes.Buffer
+
+			collector := newResultCollector()
+			collector.outputWriter = &buf
+			collector.add(tt.results...)
+			collector.log(tt.action)
+
+			assert.Equal(t, tt.want, buf.String())
 		})
 	}
 }
