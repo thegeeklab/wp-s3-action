@@ -1,22 +1,21 @@
 package plugin
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 
 	"github.com/rs/zerolog/log"
-	plugin_base "github.com/thegeeklab/wp-plugin-go/v7/plugin"
 	"github.com/thegeeklab/wp-s3-action/archive"
 	"github.com/thegeeklab/wp-s3-action/aws"
 )
 
 // handleArchiveUpload serializes the source directory into a single
-// compressed tar object at the target key.
-func (p *Plugin) handleArchiveUpload(network plugin_base.Network, s3 S3Runner) error {
-	ctx := network.Context
-
+// compressed tar object at the target key. The archive is streamed
+// directly to S3 via an io.Pipe, avoiding a temp file on disk.
+func (p *Plugin) handleArchiveUpload(ctx context.Context, s3 S3Runner) error {
 	compression, err := p.archiveCompression()
 	if err != nil {
 		return err
@@ -33,30 +32,24 @@ func (p *Plugin) handleArchiveUpload(network plugin_base.Network, s3 S3Runner) e
 		return nil
 	}
 
-	tmp, err := os.CreateTemp("", "wp-s3-action-archive-*")
-	if err != nil {
-		return fmt.Errorf("create temp archive: %w", err)
-	}
+	pr, pw := io.Pipe()
 
-	defer func() {
-		_ = tmp.Close()
-		_ = os.Remove(tmp.Name())
+	go func() {
+		defer pw.Close()
+
+		if err := archive.Create(ctx, p.Settings.Source, pw, compression); err != nil {
+			_ = pw.CloseWithError(fmt.Errorf("create archive: %w", err))
+		}
 	}()
-
-	if err := archive.Create(ctx, p.Settings.Source, tmp, compression); err != nil {
-		return fmt.Errorf("create archive: %w", err)
-	}
-
-	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf("rewind temp archive: %w", err)
-	}
 
 	if err := s3.UploadStream(ctx, aws.S3UploadStreamOptions{
 		RemoteObjectKey: p.Settings.Target,
-		Body:            tmp,
+		Body:            pr,
 		ContentType:     archiveContentType(compression),
 	}); err != nil {
-		return fmt.Errorf("upload archive: %w", err)
+		_ = pr.CloseWithError(fmt.Errorf("upload archive: %w", err))
+
+		return err
 	}
 
 	log.Info().Msgf("archive uploaded '%s' to 's3://%s/%s'",
@@ -66,10 +59,9 @@ func (p *Plugin) handleArchiveUpload(network plugin_base.Network, s3 S3Runner) e
 }
 
 // handleArchiveDownload fetches the single archive object at the target key
-// and extracts it into the source directory.
-func (p *Plugin) handleArchiveDownload(network plugin_base.Network, s3 S3Runner) error {
-	ctx := network.Context
-
+// and extracts it into the source directory. The archive is streamed
+// directly from S3 via an io.Pipe, avoiding a temp file on disk.
+func (p *Plugin) handleArchiveDownload(ctx context.Context, s3 S3Runner) error {
 	compression, err := p.archiveCompression()
 	if err != nil {
 		return err
@@ -86,34 +78,30 @@ func (p *Plugin) handleArchiveDownload(network plugin_base.Network, s3 S3Runner)
 		return fmt.Errorf("create source directory: %w", err)
 	}
 
-	tmp, err := os.CreateTemp("", "wp-s3-action-archive-*")
-	if err != nil {
-		return fmt.Errorf("create temp archive: %w", err)
-	}
+	pr, pw := io.Pipe()
 
-	defer func() {
-		_ = tmp.Close()
-		_ = os.Remove(tmp.Name())
+	go func() {
+		defer pw.Close()
+
+		if err := s3.DownloadStream(ctx, aws.S3DownloadStreamOptions{
+			RemoteObjectKey: p.Settings.Target,
+		}, pw); err != nil {
+			_ = pw.CloseWithError(fmt.Errorf("download archive: %w", err))
+		}
 	}()
 
-	if err := s3.DownloadStream(ctx, aws.S3DownloadStreamOptions{
-		RemoteObjectKey: p.Settings.Target,
-	}, tmp); err != nil {
+	if err := archive.Extract(ctx, p.Settings.Source, pr, compression); err != nil {
 		if errors.Is(err, aws.ErrObjectNotFound) {
+			_ = pr.Close()
+
 			log.Debug().Msgf("archive object 's3://%s/%s' not found, skipping download", p.Settings.Bucket, p.Settings.Target)
 
 			return nil
 		}
 
-		return fmt.Errorf("download archive: %w", err)
-	}
+		_ = pr.CloseWithError(fmt.Errorf("extract archive: %w", err))
 
-	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf("rewind temp archive: %w", err)
-	}
-
-	if err := archive.Extract(ctx, p.Settings.Source, tmp, compression); err != nil {
-		return fmt.Errorf("extract archive: %w", err)
+		return err
 	}
 
 	log.Info().Msgf("archive extracted 's3://%s/%s' to '%s'",

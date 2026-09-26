@@ -140,7 +140,7 @@ func TestHandleArchiveUpload(t *testing.T) {
 			p, client, network, teardown := tt.setup(t)
 			defer teardown()
 
-			err := p.handleArchiveUpload(network, client.S3)
+			err := p.handleArchiveUpload(network.Context, client.S3)
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
 
@@ -264,7 +264,7 @@ func TestHandleArchiveDownload(t *testing.T) {
 			p, client, network, teardown := tt.setup(t)
 			defer teardown()
 
-			err := p.handleArchiveDownload(network, client.S3)
+			err := p.handleArchiveDownload(network.Context, client.S3)
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
 

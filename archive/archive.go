@@ -296,7 +296,7 @@ func writeFile(root *os.Root, name string, r io.Reader, mode os.FileMode) error 
 func (c Compression) newWriter(w io.Writer) (io.WriteCloser, error) {
 	switch c {
 	case CompressionGzip:
-		return gzip.NewWriter(w), nil
+		return gzip.NewWriterLevel(w, gzip.BestSpeed)
 	case CompressionNone:
 		return nopWriteCloser{w}, nil
 	default:

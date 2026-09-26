@@ -147,7 +147,7 @@ func (p *Plugin) Execute() error {
 		case S3ActionUpload:
 			var err error
 			if p.Settings.Archive.Enabled {
-				err = p.handleArchiveUpload(network, client.S3)
+				err = p.handleArchiveUpload(network.Context, client.S3)
 			} else {
 				err = p.handleUpload(network, client.S3)
 			}
@@ -158,7 +158,7 @@ func (p *Plugin) Execute() error {
 		case S3ActionDownload:
 			var err error
 			if p.Settings.Archive.Enabled {
-				err = p.handleArchiveDownload(network, client.S3)
+				err = p.handleArchiveDownload(network.Context, client.S3)
 			} else {
 				err = p.handleDownload(network, client.S3)
 			}
