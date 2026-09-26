@@ -69,9 +69,9 @@ steps:
       cloudfront_distribution: E1ABCDEFGHIJKL
 ```
 
-#### Full cache configuration
+#### Customize upload headers and metadata
 
-Customize `upload_acl`, `upload_content_type`, `upload_content_encoding`, `upload_cache_control` and `upload_metadata`:
+Customize the headers and user metadata attached to uploaded objects with `upload_acl`, `upload_content_type`, `upload_content_encoding`, `upload_cache_control`, and `upload_metadata`:
 
 ```YAML
 steps:
@@ -97,19 +97,26 @@ steps:
       upload_cache_control: "public, max-age: 31536000"
       upload_metadata:
         "*.html":
-          Cache-Control: "max-age=3600"
+          Author: "release-team"
 ```
 
-All `map` parameters can be specified as `map` for a subset of files or as `string` for all files.
+Each `map` parameter accepts either a map keyed by a pattern that selects a subset of files, or a plain string that applies the same value to every uploaded file:
 
-- For the `upload_acl` parameter the key must be a glob. Files without a matching rule will default to `private`.
-- For the `upload_content_type` parameter, the key must be a file extension (including the leading dot). To apply a configuration to files without extension, the key can be set to an empty string `""`. For files without a matching rule, the content type is determined automatically.
-- For the `upload_content_encoding` parameter, the key must be a file extension (including the leading dot). To apply a configuration to files without extension, the key can be set to an empty string `""`. For files without a matching rule, no Content Encoding header is set.
-- For the `upload_cache_control` parameter, the key must be a glob. For files without a matching rule, no Cache Control header is set.
+```YAML
+upload_content_encoding: gzip
+```
 
-#### Cache a Go build
+The `map` and `string` forms are mutually exclusive within a single setting.
 
-The Go build cache (`GOCACHE`) consists of thousands of small files. Transferring it object-by-object is slow and generates many S3 requests, so use archive mode to store the whole directory as a single compressed object. Archive mode also preserves symlinks and hard links, which the per-file `download` action does not, so it is safe for the module cache (`GOMODCACHE`) as well.
+- For the `upload_acl` parameter the key must be a glob. Files without a matching rule default to `private`.
+- For the `upload_content_type` parameter, the key must be a file extension (including the leading dot). To apply a configuration to files without an extension, set the key to an empty string `""`. Files without a matching rule get their content type detected automatically.
+- For the `upload_content_encoding` parameter, the key must be a file extension (including the leading dot). To apply a configuration to files without an extension, set the key to an empty string `""`. Files without a matching rule are uploaded without a `Content-Encoding` header.
+- For the `upload_cache_control` parameter, the key must be a glob. Files without a matching rule are uploaded without a `Cache-Control` header.
+- For the `upload_metadata` parameter, the key must be a glob and the value is a map of user metadata header names to values. S3 stores user metadata under the `x-amz-meta-` prefix, so it is not interchangeable with the standard `Cache-Control`, `Content-Type`, or `Content-Encoding` headers — use `upload_cache_control`, `upload_content_type`, or `upload_content_encoding` for those instead. Only the first matching glob is applied per file.
+
+#### Cache a directory with archive mode
+
+Archive mode packs the `source` directory into a single compressed tar object on S3 instead of transferring each file separately. It is the recommended approach for any directory that contains many small files — the Go build cache (`GOCACHE`), the Go module cache (`GOMODCACHE`), `node_modules`, or a Python virtual environment. Per-file transfers cost one S3 request per object, while a single archive reduces the round trips to one GET or PUT and preserves symlinks and hard links that the per-file `download` action would lose. Archive mode only applies to the `upload` and `download` actions.
 
 ```YAML
 steps:
@@ -146,7 +153,19 @@ steps:
       target: cache/go-build.tar.gz
 ```
 
-In archive mode `target` is the full object key rather than a key prefix. Restore and save are each a single GET/PUT of the compressed archive instead of one request per file. On the first run the object does not exist, so the `download` step is a no-op. Use distinct `target` keys to keep multiple caches apart, for example one per Go version or branch. The default compression is `gzip`; set `archive_compression: none` to store an uncompressed tar instead.
+To cache `GOMODCACHE` alongside `GOCACHE`, run a second restore/save pair that points `source` at the module cache directory and uses a different `target` key (for example `cache/gomod.tar.gz`) so the two archives do not overwrite each other.
+
+In archive mode `target` is the full object key rather than a key prefix, and it must be set for both `upload` and `download`. Restore and save are each a single GET or PUT of the compressed archive. If the object does not yet exist, the `download` step logs the miss and exits successfully, so the first build against a fresh cache key simply runs with a cold cache. Restored files keep their original permissions and modification times, which matters for caches such as `GOCACHE` that rely on them to detect reuse.
+
+Keep caches for different inputs apart with distinct `target` keys, for example one per Go version, branch, or pipeline. The key is rendered as a Go template against the [wp-plugin-go Metadata](https://pkg.go.dev/github.com/thegeeklab/wp-plugin-go/v7/plugin#Metadata), so you can derive it automatically:
+
+```YAML
+target: cache/{{ .Repository.Branch }}-{{ .Pipeline.Number }}.tar.gz
+```
+
+Common fields include `.Repository.Name`, `.Repository.Owner`, `.Repository.Branch`, `.Pipeline.Number`, `.Pipeline.Event`, and `.Curr.Sha`. Templating applies only in archive mode.
+
+The default compression is `gzip`. Set `archive_compression: none` to store an uncompressed tar instead. The archive is streamed directly between the local filesystem and S3.
 
 #### Sync to a self-hosted S3 server
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -41,7 +42,7 @@ func newTestPlugin(ctx context.Context, s *Settings) (*Plugin, plugin_base.Netwo
 
 	return &Plugin{
 		Settings: s,
-	}, plugin_base.Network{Context: ctx}
+	}, plugin_base.Network{Context: ctx, Client: &http.Client{}}
 }
 
 var (

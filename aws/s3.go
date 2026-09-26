@@ -621,6 +621,7 @@ func (u *S3) DownloadStream(ctx context.Context, opt S3DownloadStreamOptions, w 
 	})
 	if err != nil {
 		var noSuchKey *types.NoSuchKey
+
 		var notFound *types.NotFound
 
 		if errors.As(err, &noSuchKey) || errors.As(err, &notFound) {

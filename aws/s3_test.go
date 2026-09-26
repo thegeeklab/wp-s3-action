@@ -1267,7 +1267,9 @@ func TestS3_UploadStream(t *testing.T) {
 				t.Helper()
 
 				mockS3Client := mocks.NewMockS3APIClient(t)
-				mockS3Client.On("PutObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(&s3.PutObjectOutput{}, ErrPutObject)
+				mockS3Client.On(
+					"PutObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything,
+				).Return(&s3.PutObjectOutput{}, ErrPutObject)
 
 				return &S3{client: mockS3Client, Bucket: "test-bucket"},
 					S3UploadStreamOptions{RemoteObjectKey: "cache/archive.tar.gz", Body: strings.NewReader("data")},

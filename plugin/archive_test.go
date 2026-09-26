@@ -96,6 +96,28 @@ func TestHandleArchiveUpload(t *testing.T) {
 			},
 		},
 		{
+			name: "rejects empty rendered target",
+			setup: func(t *testing.T) (*Plugin, *aws.Client, plugin_base.Network, func()) {
+				t.Helper()
+
+				source := t.TempDir()
+				require.NoError(t, os.WriteFile(filepath.Join(source, "a.txt"), []byte("hello"), 0o600))
+
+				client, mockS3, _ := newMockClient(t)
+				mockS3.AssertNotCalled(t, "PutObject", mock.Anything, mock.Anything)
+
+				p, network := newTestPlugin(t.Context(), &Settings{
+					Bucket:  "bucket",
+					Source:  source,
+					Target:  "{{ .Repository.Name }}",
+					Archive: Archive{Enabled: true, Compression: string(archive.CompressionGzip)},
+				})
+
+				return p, client, network, func() {}
+			},
+			wantErr: ErrArchiveTargetNotSet,
+		},
+		{
 			name: "rejects empty source directory",
 			setup: func(t *testing.T) (*Plugin, *aws.Client, plugin_base.Network, func()) {
 				t.Helper()
@@ -140,7 +162,7 @@ func TestHandleArchiveUpload(t *testing.T) {
 			p, client, network, teardown := tt.setup(t)
 			defer teardown()
 
-			err := p.handleArchiveUpload(network.Context, client.S3)
+			err := p.handleArchiveUpload(network.Context, *network.Client, plugin_base.Metadata{}, client.S3)
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
 
@@ -216,6 +238,25 @@ func TestHandleArchiveDownload(t *testing.T) {
 			},
 		},
 		{
+			name: "rejects empty rendered target",
+			setup: func(t *testing.T) (*Plugin, *aws.Client, plugin_base.Network, func()) {
+				t.Helper()
+
+				client, mockS3, _ := newMockClient(t)
+				mockS3.AssertNotCalled(t, "GetObject", mock.Anything, mock.Anything)
+
+				p, network := newTestPlugin(t.Context(), &Settings{
+					Bucket:  "bucket",
+					Source:  t.TempDir(),
+					Target:  "{{ .Repository.Name }}",
+					Archive: Archive{Enabled: true, Compression: string(archive.CompressionGzip)},
+				})
+
+				return p, client, network, func() {}
+			},
+			wantErr: ErrArchiveTargetNotSet,
+		},
+		{
 			name: "missing object is a no-op",
 			setup: func(t *testing.T) (*Plugin, *aws.Client, plugin_base.Network, func()) {
 				t.Helper()
@@ -264,7 +305,7 @@ func TestHandleArchiveDownload(t *testing.T) {
 			p, client, network, teardown := tt.setup(t)
 			defer teardown()
 
-			err := p.handleArchiveDownload(network.Context, client.S3)
+			err := p.handleArchiveDownload(network.Context, *network.Client, plugin_base.Metadata{}, client.S3)
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
 

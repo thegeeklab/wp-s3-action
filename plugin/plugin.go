@@ -194,6 +194,10 @@ func Flags(settings *Settings, category string) []cli.Flag {
 		// S3 path prefix for the bucket operations. Used by all actions to scope the S3 key
 		// namespace (a leading `/` is stripped). Empty means the bucket root. The `delete` and
 		// `download` actions require an explicit non-empty value.
+		//
+		// In archive mode `target` is the full object key and is rendered as a Go template
+		// against the Woodpecker pipeline metadata before the upload or download runs.
+		// Templating is not applied to the other actions.
 		&cli.StringFlag{
 			Name:        "target",
 			Usage:       "s3 key prefix used to scope the action (a leading '/' is stripped)",
@@ -219,7 +223,7 @@ func Flags(settings *Settings, category string) []cli.Flag {
 		// Compression algorithm used in archive mode. Supported values are `gzip` and
 		// `none`. `gzip` is the default.
 		&cli.StringFlag{
-			Name: "archive.compression",
+			Name: "archive-compression",
 			Usage: fmt.Sprintf(
 				"archive compression algorithm (%s or %s)",
 				archive.CompressionGzip,

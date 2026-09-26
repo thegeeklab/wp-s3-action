@@ -142,12 +142,17 @@ func (p *Plugin) Execute() error {
 	client.S3.DryRun = p.Settings.DryRun
 	client.Cloudfront.Distribution = p.Settings.CloudFront.Distribution
 
+	metadata, err := p.GetMetadata()
+	if err != nil {
+		return fmt.Errorf("error while getting metadata: %w", err)
+	}
+
 	for _, action := range p.Settings.Action {
 		switch action {
 		case S3ActionUpload:
 			var err error
 			if p.Settings.Archive.Enabled {
-				err = p.handleArchiveUpload(network.Context, client.S3)
+				err = p.handleArchiveUpload(network.Context, *network.Client, metadata, client.S3)
 			} else {
 				err = p.handleUpload(network, client.S3)
 			}
@@ -158,7 +163,7 @@ func (p *Plugin) Execute() error {
 		case S3ActionDownload:
 			var err error
 			if p.Settings.Archive.Enabled {
-				err = p.handleArchiveDownload(network.Context, client.S3)
+				err = p.handleArchiveDownload(network.Context, *network.Client, metadata, client.S3)
 			} else {
 				err = p.handleDownload(network, client.S3)
 			}

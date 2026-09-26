@@ -5,9 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 
 	"github.com/rs/zerolog/log"
+	plugin_base "github.com/thegeeklab/wp-plugin-go/v7/plugin"
+	plugin_template "github.com/thegeeklab/wp-plugin-go/v7/template"
 	"github.com/thegeeklab/wp-s3-action/archive"
 	"github.com/thegeeklab/wp-s3-action/aws"
 )
@@ -15,7 +18,12 @@ import (
 // handleArchiveUpload serializes the source directory into a single
 // compressed tar object at the target key. The archive is streamed
 // directly to S3 via an io.Pipe, avoiding a temp file on disk.
-func (p *Plugin) handleArchiveUpload(ctx context.Context, s3 S3Runner) error {
+func (p *Plugin) handleArchiveUpload(
+	ctx context.Context,
+	client http.Client,
+	metadata plugin_base.Metadata,
+	s3 S3Runner,
+) error {
 	compression, err := p.archiveCompression()
 	if err != nil {
 		return err
@@ -25,9 +33,18 @@ func (p *Plugin) handleArchiveUpload(ctx context.Context, s3 S3Runner) error {
 		return err
 	}
 
+	target, err := p.renderTarget(ctx, client, metadata)
+	if err != nil {
+		return err
+	}
+
+	if target == "" {
+		return ErrArchiveTargetNotSet
+	}
+
 	if p.Settings.DryRun {
 		log.Debug().Msgf("dry run: skipping archive upload of '%s' to 's3://%s/%s'",
-			p.Settings.Source, p.Settings.Bucket, p.Settings.Target)
+			p.Settings.Source, p.Settings.Bucket, target)
 
 		return nil
 	}
@@ -43,7 +60,7 @@ func (p *Plugin) handleArchiveUpload(ctx context.Context, s3 S3Runner) error {
 	}()
 
 	if err := s3.UploadStream(ctx, aws.S3UploadStreamOptions{
-		RemoteObjectKey: p.Settings.Target,
+		RemoteObjectKey: target,
 		Body:            pr,
 		ContentType:     archiveContentType(compression),
 	}); err != nil {
@@ -53,7 +70,7 @@ func (p *Plugin) handleArchiveUpload(ctx context.Context, s3 S3Runner) error {
 	}
 
 	log.Info().Msgf("archive uploaded '%s' to 's3://%s/%s'",
-		p.Settings.Source, p.Settings.Bucket, p.Settings.Target)
+		p.Settings.Source, p.Settings.Bucket, target)
 
 	return nil
 }
@@ -61,15 +78,29 @@ func (p *Plugin) handleArchiveUpload(ctx context.Context, s3 S3Runner) error {
 // handleArchiveDownload fetches the single archive object at the target key
 // and extracts it into the source directory. The archive is streamed
 // directly from S3 via an io.Pipe, avoiding a temp file on disk.
-func (p *Plugin) handleArchiveDownload(ctx context.Context, s3 S3Runner) error {
+func (p *Plugin) handleArchiveDownload(
+	ctx context.Context,
+	client http.Client,
+	metadata plugin_base.Metadata,
+	s3 S3Runner,
+) error {
 	compression, err := p.archiveCompression()
 	if err != nil {
 		return err
 	}
 
+	target, err := p.renderTarget(ctx, client, metadata)
+	if err != nil {
+		return err
+	}
+
+	if target == "" {
+		return ErrArchiveTargetNotSet
+	}
+
 	if p.Settings.DryRun {
 		log.Debug().Msgf("dry run: skipping archive download of 's3://%s/%s' to '%s'",
-			p.Settings.Bucket, p.Settings.Target, p.Settings.Source)
+			p.Settings.Bucket, target, p.Settings.Source)
 
 		return nil
 	}
@@ -84,7 +115,7 @@ func (p *Plugin) handleArchiveDownload(ctx context.Context, s3 S3Runner) error {
 		defer pw.Close()
 
 		if err := s3.DownloadStream(ctx, aws.S3DownloadStreamOptions{
-			RemoteObjectKey: p.Settings.Target,
+			RemoteObjectKey: target,
 		}, pw); err != nil {
 			_ = pw.CloseWithError(fmt.Errorf("download archive: %w", err))
 		}
@@ -94,7 +125,7 @@ func (p *Plugin) handleArchiveDownload(ctx context.Context, s3 S3Runner) error {
 		if errors.Is(err, aws.ErrObjectNotFound) {
 			_ = pr.Close()
 
-			log.Debug().Msgf("archive object 's3://%s/%s' not found, skipping download", p.Settings.Bucket, p.Settings.Target)
+			log.Debug().Msgf("archive object 's3://%s/%s' not found, skipping download", p.Settings.Bucket, target)
 
 			return nil
 		}
@@ -105,7 +136,7 @@ func (p *Plugin) handleArchiveDownload(ctx context.Context, s3 S3Runner) error {
 	}
 
 	log.Info().Msgf("archive extracted 's3://%s/%s' to '%s'",
-		p.Settings.Bucket, p.Settings.Target, p.Settings.Source)
+		p.Settings.Bucket, target, p.Settings.Source)
 
 	return nil
 }
@@ -128,4 +159,23 @@ func archiveContentType(compression archive.Compression) string {
 	default:
 		return "application/x-tar"
 	}
+}
+
+// renderTarget renders the target as a template with Woodpecker metadata.
+func (p *Plugin) renderTarget(
+	ctx context.Context,
+	client http.Client,
+	metadata plugin_base.Metadata,
+) (string, error) {
+	rendered, err := plugin_template.RenderTrim(
+		ctx,
+		client,
+		p.Settings.Target,
+		metadata,
+	)
+	if err != nil {
+		return "", fmt.Errorf("render target template: %w", err)
+	}
+
+	return rendered, nil
 }

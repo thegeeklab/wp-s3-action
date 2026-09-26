@@ -149,6 +149,10 @@ properties:
       S3 path prefix for the bucket operations. Used by all actions to scope the S3 key
       namespace (a leading `/` is stripped). Empty means the bucket root. The `delete` and
       `download` actions require an explicit non-empty value.
+
+      In archive mode `target` is the full object key and is rendered as a Go template
+      against the Woodpecker pipeline metadata before the upload or download runs.
+      Templating is not applied to the other actions.
     type: string
     required: false
 
