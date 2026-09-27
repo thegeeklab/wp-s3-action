@@ -6,8 +6,10 @@ import (
 
 //nolint:gochecknoglobals
 var (
+	// BuildVersion is the semantic version injected at build time.
 	BuildVersion = "devel"
-	BuildDate    = "00000000"
+	// BuildDate is the build date injected at build time.
+	BuildDate = "00000000"
 )
 
 func main() {

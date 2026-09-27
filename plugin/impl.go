@@ -16,18 +16,31 @@ import (
 )
 
 var (
-	ErrEmptySourceDirectory   = errors.New("source directory is empty")
-	ErrActionUnknown          = errors.New("action not found")
-	ErrPathTraversal          = errors.New("refusing path with traversal outside source directory")
-	ErrRedirectsNotSet        = errors.New("redirects setting is required for the redirect action")
+	// ErrEmptySourceDirectory is returned when the source directory has no files and AllowEmptySource is false.
+	ErrEmptySourceDirectory = errors.New("source directory is empty")
+	// ErrActionUnknown is returned when an unrecognized action name is configured.
+	ErrActionUnknown = errors.New("action not found")
+	// ErrPathTraversal is returned when a remote key would resolve outside the source directory.
+	ErrPathTraversal = errors.New("refusing path with traversal outside source directory")
+	// ErrRedirectsNotSet is returned when the redirect action is used without any redirects configured.
+	ErrRedirectsNotSet = errors.New("redirects setting is required for the redirect action")
+	// ErrCloudFrontDistribution is returned when the invalidate-cloudfront action is used without a distribution ID.
 	ErrCloudFrontDistribution = errors.New(
 		"cloudfront distribution is required for invalidate-cloudfront action",
 	)
-	ErrTargetNotSet   = errors.New("target is required for the delete action")
+	// ErrTargetNotSet is returned when the delete action is used without a target prefix.
+	ErrTargetNotSet = errors.New("target is required for the delete action")
+	// ErrDownloadTarget is returned when the download action is used without a target prefix to avoid
+	// pulling the entire bucket.
 	ErrDownloadTarget = errors.New(
 		"target is required for the download action to avoid pulling the entire bucket",
 	)
+	// ErrInvalidMaxConcurrency is returned when max-concurrency is less than 1.
 	ErrInvalidMaxConcurrency = errors.New("max-concurrency must be at least 1")
+	// ErrArchiveTargetNotSet is returned when archive mode is enabled without a target key.
+	ErrArchiveTargetNotSet = errors.New("target is required for archive upload/download")
+	// ErrArchiveUnsupported is returned when archive mode is combined with an unsupported action.
+	ErrArchiveUnsupported = errors.New("archive mode only supports the upload and download actions")
 )
 
 const (
@@ -38,7 +51,7 @@ const (
 	S3ActionInvalidateCloudFront S3Action = "invalidate-cloudfront"
 )
 
-// Execute provides the implementation of the plugin.
+// run is the internal entry point that validates settings and then executes the configured actions.
 func (p *Plugin) run(ctx context.Context) error {
 	if err := p.Validate(); err != nil {
 		return fmt.Errorf("validation failed: %w", err)
@@ -96,6 +109,22 @@ func (p *Plugin) Validate() error {
 		p.Settings.Action = append(p.Settings.Action, action)
 	}
 
+	if p.Settings.Archive.Enabled {
+		if p.Settings.Target == "" {
+			return ErrArchiveTargetNotSet
+		}
+
+		for _, action := range p.Settings.Action {
+			if action != S3ActionUpload && action != S3ActionDownload {
+				return fmt.Errorf("%w: %s", ErrArchiveUnsupported, action)
+			}
+		}
+
+		if _, err := p.archiveCompression(); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -124,14 +153,33 @@ func (p *Plugin) Execute() error {
 	client.S3.DryRun = p.Settings.DryRun
 	client.Cloudfront.Distribution = p.Settings.CloudFront.Distribution
 
+	metadata, err := p.GetMetadata()
+	if err != nil {
+		return fmt.Errorf("error while getting metadata: %w", err)
+	}
+
 	for _, action := range p.Settings.Action {
 		switch action {
 		case S3ActionUpload:
-			if err := p.handleUpload(network, client.S3); err != nil {
+			var err error
+			if p.Settings.Archive.Enabled {
+				err = p.handleArchiveUpload(network.Context, *network.Client, metadata, client.S3)
+			} else {
+				err = p.handleUpload(network, client.S3)
+			}
+
+			if err != nil {
 				return err
 			}
 		case S3ActionDownload:
-			if err := p.handleDownload(network, client.S3); err != nil {
+			var err error
+			if p.Settings.Archive.Enabled {
+				err = p.handleArchiveDownload(network.Context, *network.Client, metadata, client.S3)
+			} else {
+				err = p.handleDownload(network, client.S3)
+			}
+
+			if err != nil {
 				return err
 			}
 		case S3ActionDelete:
@@ -571,9 +619,9 @@ func withinTarget(key, target string) bool {
 }
 
 // pathWithinRoot reports whether path stays within root. It resolves symlinks
-// at every existing ancestor of path; the deepest existing ancestor determines
+// at every existing ancestor of path. The deepest existing ancestor determines
 // the comparison. If neither root nor any ancestor of path resolves, the
-// conservative default is false (path cannot be guaranteed to be contained).
+// conservative default is false because the path cannot be guaranteed to be contained.
 func pathWithinRoot(root, path string) bool {
 	resolvedRoot, err := filepath.EvalSymlinks(root)
 	if err != nil {

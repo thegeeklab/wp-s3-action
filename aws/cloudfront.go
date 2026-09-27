@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// Cloudfront wraps a CloudfrontAPIClient with distribution-level configuration.
 type Cloudfront struct {
 	client       CloudfrontAPIClient
 	Distribution string
@@ -21,6 +22,7 @@ func NewCloudfront(client CloudfrontAPIClient) *Cloudfront {
 	return &Cloudfront{client: client}
 }
 
+// CloudfrontInvalidateOptions configures a CloudFront cache invalidation.
 type CloudfrontInvalidateOptions struct {
 	Path string
 }

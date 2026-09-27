@@ -13,14 +13,14 @@ import (
 
 func TestNewClient_HTTPClient(t *testing.T) {
 	tests := []struct {
-		name       string
-		httpClient *http.Client
-		wantErr    error
+		name            string
+		httpClient      *http.Client
+		wantErrContains []string
 	}{
 		{
-			name:       "fail when self-signed endpoint is used without insecure http client",
-			httpClient: nil,
-			wantErr:    errAny,
+			name:            "fail when self-signed endpoint is used without insecure http client",
+			httpClient:      nil,
+			wantErrContains: []string{"x509"},
 		},
 		{
 			name: "succeed when insecure http client is provided",
@@ -49,9 +49,12 @@ func TestNewClient_HTTPClient(t *testing.T) {
 			require.NoError(t, err)
 
 			err = client.S3.List(t.Context(), S3ListOptions{Path: ""}, func(string) error { return nil })
-			if tt.wantErr != nil {
+			if len(tt.wantErrContains) > 0 {
 				require.Error(t, err)
-				assert.Contains(t, err.Error(), "x509")
+
+				for _, want := range tt.wantErrContains {
+					assert.Contains(t, err.Error(), want)
+				}
 
 				return
 			}

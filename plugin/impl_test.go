@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -41,7 +42,7 @@ func newTestPlugin(ctx context.Context, s *Settings) (*Plugin, plugin_base.Netwo
 
 	return &Plugin{
 		Settings: s,
-	}, plugin_base.Network{Context: ctx}
+	}, plugin_base.Network{Context: ctx, Client: &http.Client{}}
 }
 
 var (
@@ -363,11 +364,11 @@ func TestRunActionJobs(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name       string
-		build      func(t *testing.T, jobs chan<- Job) error
-		mockDelete func(t *testing.T, mockS3 *mocks.MockS3APIClient)
-		wantErr    error
-		errMsg     string
+		name            string
+		build           func(t *testing.T, jobs chan<- Job) error
+		mockDelete      func(t *testing.T, mockS3 *mocks.MockS3APIClient)
+		wantErr         error
+		wantErrContains []string
 	}{
 		{
 			name: "build error short-circuits without running",
@@ -392,8 +393,8 @@ func TestRunActionJobs(t *testing.T) {
 				mockS3.On("DeleteObjects", mock.Anything, mock.Anything).
 					Return(&s3.DeleteObjectsOutput{}, errMockDelete).Once()
 			},
-			wantErr: errMockDelete,
-			errMsg:  "delete",
+			wantErr:         errMockDelete,
+			wantErrContains: []string{"delete"},
 		},
 	}
 
@@ -416,8 +417,8 @@ func TestRunActionJobs(t *testing.T) {
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
 
-				if tt.errMsg != "" {
-					assert.Contains(t, err.Error(), tt.errMsg)
+				for _, want := range tt.wantErrContains {
+					assert.Contains(t, err.Error(), want)
 				}
 
 				return

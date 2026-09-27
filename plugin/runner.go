@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"context"
+	"io"
 
 	"github.com/thegeeklab/wp-s3-action/aws"
 )
@@ -13,6 +14,8 @@ import (
 type S3Runner interface {
 	Upload(ctx context.Context, opt aws.S3UploadOptions) (aws.UploadResult, error)
 	Download(ctx context.Context, opt aws.S3DownloadOptions) error
+	UploadStream(ctx context.Context, opt aws.S3UploadStreamOptions) error
+	DownloadStream(ctx context.Context, opt aws.S3DownloadStreamOptions, w io.Writer) error
 	Redirect(ctx context.Context, opt aws.S3RedirectOptions) error
 	Delete(ctx context.Context, opt aws.S3DeleteOptions) error
 	List(ctx context.Context, opt aws.S3ListOptions, fn func(string) error) error
