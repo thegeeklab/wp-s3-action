@@ -116,7 +116,7 @@ The `map` and `string` forms are mutually exclusive within a single setting.
 
 #### Cache a directory with archive mode
 
-Archive mode packs the `source` directory into a single compressed tar object on S3 instead of transferring each file separately. It is the recommended approach for any directory that contains many small files — the Go build cache (`GOCACHE`), the Go module cache (`GOMODCACHE`), `node_modules`, or a Python virtual environment. Per-file transfers cost one S3 request per object, while a single archive reduces the round trips to one GET or PUT and preserves symlinks and hard links that the per-file `download` action would lose. Archive mode only applies to the `upload` and `download` actions.
+Archive mode packs the `source` directory into a single compressed tar object on S3 instead of transferring each file separately. It is the recommended approach for any directory that contains many small files, e.g. Go build cache (`GOCACHE`), Go module cache (`GOMODCACHE`), `node_modules`, or a Python virtual environment. Archive mode only applies to the `upload` and `download` actions.
 
 ```YAML
 steps:
