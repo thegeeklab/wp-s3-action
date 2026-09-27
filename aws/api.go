@@ -7,6 +7,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
+// S3APIClient is the subset of the AWS S3 API used by the plugin.
+//
 //nolint:lll,interfacebloat
 type S3APIClient interface {
 	HeadObject(ctx context.Context, params *s3.HeadObjectInput, optFns ...func(*s3.Options)) (*s3.HeadObjectOutput, error)
@@ -23,6 +25,8 @@ type S3APIClient interface {
 	AbortMultipartUpload(ctx context.Context, params *s3.AbortMultipartUploadInput, optFns ...func(*s3.Options)) (*s3.AbortMultipartUploadOutput, error)
 }
 
+// CloudfrontAPIClient is the subset of the AWS CloudFront API used by the plugin.
+//
 //nolint:lll
 type CloudfrontAPIClient interface {
 	CreateInvalidation(ctx context.Context, params *cloudfront.CreateInvalidationInput, optFns ...func(*cloudfront.Options)) (*cloudfront.CreateInvalidationOutput, error)

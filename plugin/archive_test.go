@@ -41,6 +41,7 @@ func TestHandleArchiveUpload(t *testing.T) {
 
 				var uploaded []byte
 
+				mockS3.On("HeadObject", mock.Anything, mock.Anything).Return(&s3.HeadObjectOutput{}, &types.NotFound{}).Once()
 				mockS3.On("PutObject", mock.Anything, mock.MatchedBy(func(input *s3.PutObjectInput) bool {
 					return awssdk.ToString(input.Key) == "cache/archive.tar.gz" &&
 						awssdk.ToString(input.ContentType) == "application/gzip"
@@ -336,4 +337,22 @@ func TestArchiveContentType(t *testing.T) {
 			assert.Equal(t, tt.want, archiveContentType(tt.compression))
 		})
 	}
+}
+
+func TestRenderTargetStripsLeadingSlash(t *testing.T) {
+	t.Parallel()
+
+	p, network := newTestPlugin(t.Context(), &Settings{
+		Bucket: "bucket",
+		Source: t.TempDir(),
+		Target: "{{ .Repository.Branch }}",
+	})
+
+	metadata := plugin_base.Metadata{
+		Repository: plugin_base.Repository{Branch: "/main"},
+	}
+
+	rendered, err := p.renderTarget(network.Context, *network.Client, metadata)
+	require.NoError(t, err)
+	assert.Equal(t, "main", rendered)
 }

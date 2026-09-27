@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/rs/zerolog/log"
 	plugin_base "github.com/thegeeklab/wp-plugin-go/v7/plugin"
@@ -177,5 +178,8 @@ func (p *Plugin) renderTarget(
 		return "", fmt.Errorf("render target template: %w", err)
 	}
 
-	return rendered, nil
+	// A rendered metadata value can begin with a slash. Normalize it the same
+	// way Validate normalizes the raw target so archive and non-archive modes
+	// produce consistent keys.
+	return strings.TrimPrefix(rendered, "/"), nil
 }

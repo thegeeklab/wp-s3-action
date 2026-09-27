@@ -23,6 +23,7 @@ var (
 	ErrDeleteObject = errors.New("delete object failed")
 	ErrListObjects  = errors.New("list objects failed")
 	ErrGetObject    = errors.New("get object failed")
+	ErrHeadObject   = errors.New("head object failed")
 	ErrCloseFile    = errors.New("close file failed")
 	errMockAbort    = errors.New("abort iteration")
 )
@@ -1219,6 +1220,7 @@ func TestS3_UploadStream(t *testing.T) {
 				t.Helper()
 
 				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.On("HeadObject", mock.Anything, mock.Anything).Return(&s3.HeadObjectOutput{}, &types.NotFound{}).Once()
 				mockS3Client.On("PutObject", mock.Anything, mock.MatchedBy(func(input *s3.PutObjectInput) bool {
 					return aws.ToString(input.Key) == "cache/archive.tar.gz" &&
 						aws.ToString(input.ContentType) == "application/gzip"
@@ -1236,11 +1238,54 @@ func TestS3_UploadStream(t *testing.T) {
 			},
 		},
 		{
+			name: "overwrite existing object",
+			setup: func(t *testing.T) (*S3, S3UploadStreamOptions, func()) {
+				t.Helper()
+
+				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.On("HeadObject", mock.Anything, mock.Anything).Return(&s3.HeadObjectOutput{}, nil).Once()
+				mockS3Client.On(
+					"PutObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything,
+				).Return(&s3.PutObjectOutput{}, nil).Once()
+
+				return &S3{client: mockS3Client, Bucket: "test-bucket"},
+					S3UploadStreamOptions{
+						RemoteObjectKey: "cache/archive.tar.gz",
+						Body:            strings.NewReader("data"),
+					},
+					func() {
+						mockS3Client.AssertExpectations(t)
+					}
+			},
+		},
+		{
+			name: "proceed when existence check fails",
+			setup: func(t *testing.T) (*S3, S3UploadStreamOptions, func()) {
+				t.Helper()
+
+				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.On("HeadObject", mock.Anything, mock.Anything).Return(&s3.HeadObjectOutput{}, ErrHeadObject).Once()
+				mockS3Client.On(
+					"PutObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything,
+				).Return(&s3.PutObjectOutput{}, nil).Once()
+
+				return &S3{client: mockS3Client, Bucket: "test-bucket"},
+					S3UploadStreamOptions{
+						RemoteObjectKey: "cache/archive.tar.gz",
+						Body:            strings.NewReader("data"),
+					},
+					func() {
+						mockS3Client.AssertExpectations(t)
+					}
+			},
+		},
+		{
 			name: "skip upload when key is empty",
 			setup: func(t *testing.T) (*S3, S3UploadStreamOptions, func()) {
 				t.Helper()
 
 				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.AssertNotCalled(t, "HeadObject", mock.Anything, mock.Anything)
 				mockS3Client.AssertNotCalled(t, "PutObject", mock.Anything, mock.Anything)
 
 				return &S3{client: mockS3Client, Bucket: "test-bucket"},
@@ -1254,6 +1299,7 @@ func TestS3_UploadStream(t *testing.T) {
 				t.Helper()
 
 				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.AssertNotCalled(t, "HeadObject", mock.Anything, mock.Anything)
 				mockS3Client.AssertNotCalled(t, "PutObject", mock.Anything, mock.Anything)
 
 				return &S3{client: mockS3Client, Bucket: "test-bucket", DryRun: true},
@@ -1267,9 +1313,10 @@ func TestS3_UploadStream(t *testing.T) {
 				t.Helper()
 
 				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.On("HeadObject", mock.Anything, mock.Anything).Return(&s3.HeadObjectOutput{}, &types.NotFound{}).Once()
 				mockS3Client.On(
 					"PutObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything,
-				).Return(&s3.PutObjectOutput{}, ErrPutObject)
+				).Return(&s3.PutObjectOutput{}, ErrPutObject).Once()
 
 				return &S3{client: mockS3Client, Bucket: "test-bucket"},
 					S3UploadStreamOptions{RemoteObjectKey: "cache/archive.tar.gz", Body: strings.NewReader("data")},
@@ -1283,6 +1330,7 @@ func TestS3_UploadStream(t *testing.T) {
 				t.Helper()
 
 				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.On("HeadObject", mock.Anything, mock.Anything).Return(&s3.HeadObjectOutput{}, &types.NotFound{}).Once()
 				mockS3Client.On("CreateMultipartUpload", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 					Return(&s3.CreateMultipartUploadOutput{UploadId: aws.String("upload-id")}, nil).Once()
 				mockS3Client.On("UploadPart", mock.Anything, mock.Anything, mock.Anything).

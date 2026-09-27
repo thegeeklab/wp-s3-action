@@ -19,6 +19,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// S3 wraps an S3APIClient with bucket-level configuration and higher-level operations.
 type S3 struct {
 	client     S3APIClient
 	Bucket     string
@@ -32,17 +33,23 @@ func NewS3(client S3APIClient) *S3 {
 }
 
 var (
-	ErrEmptyLocalFilePath   = errors.New("local file path is empty")
+	// ErrEmptyLocalFilePath is returned when a download target has no local path.
+	ErrEmptyLocalFilePath = errors.New("local file path is empty")
+	// ErrLocalPathOutsideRoot is returned when a resolved path escapes the configured root.
 	ErrLocalPathOutsideRoot = errors.New("local path resolves outside configured root")
-	ErrListPagination       = errors.New("invalid s3 list pagination response")
-	ErrPartialDelete        = errors.New("s3 delete objects reported per-key failure")
-	ErrObjectNotFound       = errors.New("object not found")
+	// ErrListPagination is returned when the S3 list response is truncated but has an empty page.
+	ErrListPagination = errors.New("invalid s3 list pagination response")
+	// ErrPartialDelete is returned when a batch delete reports per-key failures.
+	ErrPartialDelete = errors.New("s3 delete objects reported per-key failure")
+	// ErrObjectNotFound is returned when a requested S3 object does not exist.
+	ErrObjectNotFound = errors.New("object not found")
 )
 
 // MaxDeleteBatch is the maximum number of keys accepted by a single
 // S3 DeleteObjects request.
 const MaxDeleteBatch = 1000
 
+// S3UploadOptions configures a single-file upload.
 type S3UploadOptions struct {
 	LocalFilePath   string
 	RemoteObjectKey string
@@ -53,31 +60,37 @@ type S3UploadOptions struct {
 	Metadata        map[string]map[string]string
 }
 
+// S3RedirectOptions configures an S3 website redirect object.
 type S3RedirectOptions struct {
 	Path     string
 	Location string
 }
 
+// S3DeleteOptions configures a batch delete of remote objects.
 type S3DeleteOptions struct {
 	RemoteObjectKeys []string
 }
 
+// S3DownloadOptions configures a single-file download.
 type S3DownloadOptions struct {
 	LocalRoot       string
 	LocalFilePath   string
 	RemoteObjectKey string
 }
 
+// S3ListOptions configures a listing of objects under a path prefix.
 type S3ListOptions struct {
 	Path string
 }
 
+// S3UploadStreamOptions configures a streaming upload from a reader.
 type S3UploadStreamOptions struct {
 	RemoteObjectKey string
 	Body            io.Reader
 	ContentType     string
 }
 
+// S3DownloadStreamOptions configures a streaming download to a writer.
 type S3DownloadStreamOptions struct {
 	RemoteObjectKey string
 }
@@ -157,7 +170,7 @@ func (u *S3) Upload(ctx context.Context, opt S3UploadOptions) (UploadResult, err
 	// The ETag in HeadObject comes back in different forms depending on
 	// the server: simple PUTs return a quoted hex MD5, multipart objects
 	// append "-<part-count>" and may or may not be quoted. Comparing the
-	// raw string is unreliable; normalize and split multipart suffixes.
+	// raw string is unreliable, so normalize and split multipart suffixes.
 	remoteHash, isMultipart := parseETag(aws.ToString(head.ETag))
 	hashesMatch := !isMultipart && remoteHash == sum
 
@@ -193,8 +206,8 @@ func (u *S3) Upload(ctx context.Context, opt S3UploadOptions) (UploadResult, err
 	}
 
 	// hashes differ OR remote is multipart OR remote ETag is missing.
-	// Multipart hashes are not the body MD5 so we cannot verify equality;
-	// fall back to a full PutObject.
+	// Multipart hashes are not the body MD5 so we cannot verify equality.
+	// Fall back to a full PutObject.
 	if isMultipart {
 		log.Debug().Msgf(
 			"remote '%s' was uploaded via multipart (etag=%q); cannot verify content match, re-uploading",
@@ -575,11 +588,13 @@ func (u *S3) Download(ctx context.Context, opt S3DownloadOptions) error {
 }
 
 // UploadStream uploads a single object from a reader. Unlike Upload, it
-// performs no HeadObject/content comparison, which makes it suitable for
-// objects produced at runtime (e.g. archive/cache tarballs) whose content
-// changes on every invocation. It uploads through the S3 transfer manager,
-// which transparently switches from a single PutObject to a multipart upload
-// for bodies larger than the manager's multipart threshold.
+// performs no content comparison: the body is produced at runtime (e.g. an
+// archive/cache tarball) and changes on every invocation. It uploads through
+// the S3 transfer manager, which buffers up to MultipartUploadThreshold bytes
+// to detect the body size and then streams the remainder, switching to a
+// multipart upload for bodies larger than the threshold. An existing object at
+// the key is overwritten. This is logged at warning level so a misconfigured
+// target does not clobber existing data silently.
 func (u *S3) UploadStream(ctx context.Context, opt S3UploadStreamOptions) error {
 	if opt.RemoteObjectKey == "" {
 		return nil
@@ -589,6 +604,23 @@ func (u *S3) UploadStream(ctx context.Context, opt S3UploadStreamOptions) error 
 		log.Debug().Msgf("uploading '%s' (dry run)", opt.RemoteObjectKey)
 
 		return nil
+	}
+
+	if _, err := u.client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(u.Bucket),
+		Key:    aws.String(opt.RemoteObjectKey),
+	}); err != nil {
+		var notFoundErr *types.NotFound
+
+		var noSuchKey *types.NoSuchKey
+
+		if errors.As(err, &notFoundErr) || errors.As(err, &noSuchKey) {
+			log.Debug().Msgf("object '%s' not found, uploading new object", opt.RemoteObjectKey)
+		} else {
+			log.Debug().Err(err).Msgf("could not check whether object '%s' exists, proceeding", opt.RemoteObjectKey)
+		}
+	} else {
+		log.Warn().Msgf("object '%s' already exists and will be overwritten", opt.RemoteObjectKey)
 	}
 
 	_, err := transfermanager.New(u.client).UploadObject(ctx, &transfermanager.UploadObjectInput{

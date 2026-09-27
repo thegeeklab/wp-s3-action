@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -15,6 +16,7 @@ type tarEntry struct {
 	name     string
 	typeflag byte
 	mode     int64
+	modTime  time.Time
 	content  string
 	linkname string
 }
@@ -43,6 +45,7 @@ func buildTar(t *testing.T, entries ...tarEntry) *bytes.Reader {
 			Name:     e.name,
 			Typeflag: e.typeflag,
 			Mode:     mode,
+			ModTime:  e.modTime,
 			Size:     int64(len(e.content)),
 			Linkname: e.linkname,
 		}
@@ -236,4 +239,23 @@ func TestExtractHardLink(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.True(t, os.SameFile(a, b), "extracted hard link must reference the same inode")
+}
+
+func TestExtractPreservesDirectoryModTime(t *testing.T) {
+	t.Parallel()
+
+	modTime := time.Date(2020, 1, 2, 3, 4, 5, 0, time.UTC)
+
+	entries := []tarEntry{
+		{name: "dir", typeflag: tar.TypeDir, modTime: modTime},
+		{name: "dir/file.txt", typeflag: tar.TypeReg, content: "hello", modTime: modTime},
+	}
+
+	dest := t.TempDir()
+
+	require.NoError(t, Extract(t.Context(), dest, buildTar(t, entries...), CompressionNone))
+
+	info, err := os.Stat(filepath.Join(dest, "dir"))
+	require.NoError(t, err)
+	assert.True(t, info.ModTime().Equal(modTime), "directory mtime must survive writing its children")
 }

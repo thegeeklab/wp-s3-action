@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"syscall"
+	"time"
 )
 
 // ErrUnsupportedEntry is returned when Extract encounters a tar entry type it
@@ -149,7 +150,7 @@ func hardLinkKeyFor(info fs.FileInfo) (hardLinkKey, bool) {
 		return hardLinkKey{}, false
 	}
 
-	//nolint:unconvert // Dev/Ino are not uint64 on every platform; the conversions keep the package portable.
+	//nolint:unconvert // Dev/Ino are not uint64 on every platform. The conversions keep the package portable.
 	return hardLinkKey{dev: uint64(stat.Dev), ino: uint64(stat.Ino)}, true
 }
 
@@ -179,6 +180,8 @@ func Extract(ctx context.Context, dest string, r io.Reader, compression Compress
 
 	tr := tar.NewReader(decomp)
 
+	var dirs []dirEntry
+
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -186,39 +189,74 @@ func Extract(ctx context.Context, dest string, r io.Reader, compression Compress
 
 		header, err := tr.Next()
 		if errors.Is(err, io.EOF) {
-			return nil
+			break
 		}
 
 		if err != nil {
 			return err
 		}
 
-		if err := extractEntry(root, tr, header); err != nil {
+		dir, err := extractEntry(root, tr, header)
+		if err != nil {
 			return err
 		}
+
+		if dir.name != "" {
+			dirs = append(dirs, dir)
+		}
 	}
+
+	// Restore directory modification times after every entry is written.
+	// Creating a child updates its parent directory's mtime, so applying the
+	// archived time inline would be clobbered by the next write. Walking the
+	// collected directories in reverse sets a parent's mtime only after its
+	// children.
+	for i := len(dirs) - 1; i >= 0; i-- {
+		dir := dirs[i]
+		if err := root.Chtimes(dir.name, dir.modTime, dir.modTime); err != nil {
+			return fmt.Errorf("restore modification time for %q: %w", dir.name, err)
+		}
+	}
+
+	return nil
 }
 
-// extractEntry restores a single tar entry within root.
-func extractEntry(root *os.Root, tr *tar.Reader, header *tar.Header) error {
+// dirEntry records a directory whose modification time must be restored after
+// the archive has been fully extracted.
+type dirEntry struct {
+	name    string
+	modTime time.Time
+}
+
+// extractEntry restores a single tar entry within root. For directory entries
+// it returns the directory metadata with a non-empty name so the caller can
+// restore the modification time after the remaining entries are written. For
+// every other entry type the returned dirEntry has an empty name.
+func extractEntry(root *os.Root, tr *tar.Reader, header *tar.Header) (dirEntry, error) {
 	name := filepath.FromSlash(header.Name)
 
 	switch header.Typeflag {
 	case tar.TypeDir:
 		if err := root.MkdirAll(name, header.FileInfo().Mode().Perm()); err != nil {
-			return fmt.Errorf("create directory %q: %w", header.Name, err)
+			return dirEntry{}, fmt.Errorf("create directory %q: %w", header.Name, err)
 		}
+
+		if header.ModTime.IsZero() {
+			return dirEntry{}, nil
+		}
+
+		return dirEntry{name: name, modTime: header.ModTime}, nil
 	case tar.TypeReg:
 		if err := ensureParent(root, name); err != nil {
-			return err
+			return dirEntry{}, err
 		}
 
 		if err := writeFile(root, name, tr, header.FileInfo().Mode().Perm()); err != nil {
-			return err
+			return dirEntry{}, err
 		}
 	case tar.TypeSymlink:
 		if err := ensureParent(root, name); err != nil {
-			return err
+			return dirEntry{}, err
 		}
 
 		// Replace any existing entry so a previously extracted file or
@@ -226,34 +264,34 @@ func extractEntry(root *os.Root, tr *tar.Reader, header *tar.Header) error {
 		_ = root.Remove(name)
 
 		if err := root.Symlink(header.Linkname, name); err != nil {
-			return fmt.Errorf("create symlink %q: %w", header.Name, err)
+			return dirEntry{}, fmt.Errorf("create symlink %q: %w", header.Name, err)
 		}
 
-		return nil
+		return dirEntry{}, nil
 	case tar.TypeLink:
 		if err := ensureParent(root, name); err != nil {
-			return err
+			return dirEntry{}, err
 		}
 
 		_ = root.Remove(name)
 
 		target := filepath.FromSlash(header.Linkname)
 		if err := root.Link(target, name); err != nil {
-			return fmt.Errorf("create hard link %q -> %q: %w", header.Name, header.Linkname, err)
+			return dirEntry{}, fmt.Errorf("create hard link %q -> %q: %w", header.Name, header.Linkname, err)
 		}
 
-		return nil
+		return dirEntry{}, nil
 	default:
-		return fmt.Errorf("%w: %q (type %d)", ErrUnsupportedEntry, header.Name, header.Typeflag)
+		return dirEntry{}, fmt.Errorf("%w: %q (type %d)", ErrUnsupportedEntry, header.Name, header.Typeflag)
 	}
 
 	if !header.ModTime.IsZero() {
 		if err := root.Chtimes(name, header.ModTime, header.ModTime); err != nil {
-			return fmt.Errorf("restore modification time for %q: %w", header.Name, err)
+			return dirEntry{}, fmt.Errorf("restore modification time for %q: %w", header.Name, err)
 		}
 	}
 
-	return nil
+	return dirEntry{}, nil
 }
 
 // ensureParent creates the parent directory of name when it is not the root.

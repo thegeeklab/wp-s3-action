@@ -12,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
+// Client bundles the higher-level S3 and CloudFront services used by the plugin.
 type Client struct {
 	S3         *S3
 	Cloudfront *Cloudfront
