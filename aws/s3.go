@@ -627,7 +627,9 @@ func (u *S3) UploadStream(ctx context.Context, opt S3UploadStreamOptions) error 
 		if isNotFound(err) {
 			log.Debug().Msgf("object '%s' not found, uploading new object", opt.RemoteObjectKey)
 		} else {
-			log.Warn().Err(err).Msgf("could not check whether object '%s' exists, proceeding with upload that may overwrite", opt.RemoteObjectKey)
+			log.Warn().
+				Err(err).
+				Msgf("could not check whether object '%s' exists, proceeding with upload that may overwrite", opt.RemoteObjectKey)
 		}
 	} else {
 		log.Warn().Msgf("object '%s' already exists and will be overwritten", opt.RemoteObjectKey)

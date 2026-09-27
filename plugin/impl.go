@@ -30,7 +30,8 @@ var (
 	)
 	// ErrTargetNotSet is returned when the delete action is used without a target prefix.
 	ErrTargetNotSet = errors.New("target is required for the delete action")
-	// ErrDownloadTarget is returned when the download action is used without a target prefix to avoid pulling the entire bucket.
+	// ErrDownloadTarget is returned when the download action is used without a target prefix to avoid
+	// pulling the entire bucket.
 	ErrDownloadTarget = errors.New(
 		"target is required for the download action to avoid pulling the entire bucket",
 	)

@@ -27,6 +27,7 @@ var (
 	ErrHeadObject   = errors.New("head object failed")
 	ErrCloseFile    = errors.New("close file failed")
 	errMockAbort    = errors.New("abort iteration")
+	errUnrelated    = errors.New("some other error")
 )
 
 type failingCloseWriter struct {
@@ -158,6 +159,63 @@ func TestS3_Upload(t *testing.T) {
 			wantErr:    nil,
 		},
 		{
+			name: "upload new file when dry run is true",
+			setup: func(t *testing.T) (*S3, S3UploadOptions, func()) {
+				t.Helper()
+
+				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.On("HeadObject", mock.Anything, mock.Anything).Return(&s3.HeadObjectOutput{}, &types.NotFound{})
+
+				svc := &S3{
+					client: mockS3Client,
+					Bucket: "test-bucket",
+					DryRun: true,
+				}
+
+				uploadOpts := S3UploadOptions{
+					LocalFilePath:   createTempFile(t, "file1.txt"),
+					RemoteObjectKey: "remote/path/file1.txt",
+				}
+
+				return svc, uploadOpts, func() {
+					mockS3Client.AssertExpectations(t)
+				}
+			},
+			wantResult: UploadResultAdded,
+			wantErr:    nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc, opt, teardown := tt.setup(t)
+			defer teardown()
+
+			result, err := svc.Upload(t.Context(), opt)
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.wantResult, result)
+		})
+	}
+}
+
+func TestS3_UploadMetadataUpdate(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		setup      func(t *testing.T) (*S3, S3UploadOptions, func())
+		wantResult UploadResult
+		wantErr    error
+	}{
+		{
 			name: "update metadata when content type changed",
 			setup: func(t *testing.T) (*S3, S3UploadOptions, func()) {
 				t.Helper()
@@ -286,32 +344,6 @@ func TestS3_Upload(t *testing.T) {
 					}
 			},
 			wantResult: UploadResultUpdated,
-			wantErr:    nil,
-		},
-		{
-			name: "upload new file when dry run is true",
-			setup: func(t *testing.T) (*S3, S3UploadOptions, func()) {
-				t.Helper()
-
-				mockS3Client := mocks.NewMockS3APIClient(t)
-				mockS3Client.On("HeadObject", mock.Anything, mock.Anything).Return(&s3.HeadObjectOutput{}, &types.NotFound{})
-
-				svc := &S3{
-					client: mockS3Client,
-					Bucket: "test-bucket",
-					DryRun: true,
-				}
-
-				uploadOpts := S3UploadOptions{
-					LocalFilePath:   createTempFile(t, "file1.txt"),
-					RemoteObjectKey: "remote/path/file1.txt",
-				}
-
-				return svc, uploadOpts, func() {
-					mockS3Client.AssertExpectations(t)
-				}
-			},
-			wantResult: UploadResultAdded,
 			wantErr:    nil,
 		},
 	}
@@ -1432,7 +1464,7 @@ func TestIsNotFound(t *testing.T) {
 		},
 		{
 			name: "unrelated error",
-			err:  errors.New("some other error"),
+			err:  errUnrelated,
 			want: false,
 		},
 	}
