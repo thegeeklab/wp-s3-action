@@ -160,12 +160,12 @@ func hardLinkKeyFor(info fs.FileInfo) (hardLinkKey, bool) {
 // os.Root so a symlink planted earlier in the stream cannot redirect a write
 // outside dest.
 func Extract(ctx context.Context, dest string, r io.Reader, compression Compression) error {
-	decomp, err := compression.newReader(r)
+	decompressor, err := compression.newReader(r)
 	if err != nil {
 		return err
 	}
 
-	defer decomp.Close()
+	defer decompressor.Close()
 
 	if err := os.MkdirAll(dest, 0o755); err != nil {
 		return fmt.Errorf("create destination directory: %w", err)
@@ -178,7 +178,7 @@ func Extract(ctx context.Context, dest string, r io.Reader, compression Compress
 
 	defer root.Close()
 
-	tr := tar.NewReader(decomp)
+	tr := tar.NewReader(decompressor)
 
 	var dirs []dirEntry
 

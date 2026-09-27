@@ -16,7 +16,12 @@
     "GOCACHE",
     "urfave",
     "zerolog",
-    "isatty"
+    "isatty",
+    "fifos",
+    "gomod",
+    "Nlink",
+    "transfermanager",
+    "Typeflag"
   ],
   "ignorePaths": [
     ".woodpecker",

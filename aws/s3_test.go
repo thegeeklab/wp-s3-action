@@ -3,6 +3,7 @@ package aws
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -111,6 +112,32 @@ func TestS3_Upload(t *testing.T) {
 
 				mockS3Client := mocks.NewMockS3APIClient(t)
 				mockS3Client.On("HeadObject", mock.Anything, mock.Anything).Return(&s3.HeadObjectOutput{}, &types.NotFound{})
+				mockS3Client.On("PutObject", mock.Anything, mock.Anything).Return(&s3.PutObjectOutput{}, nil)
+
+				svc := &S3{
+					client: mockS3Client,
+					Bucket: "test-bucket",
+				}
+
+				uploadOpts := S3UploadOptions{
+					LocalFilePath:   createTempFile(t, "file.txt"),
+					RemoteObjectKey: "remote/path/file.txt",
+				}
+
+				return svc, uploadOpts, func() {
+					mockS3Client.AssertExpectations(t)
+				}
+			},
+			wantResult: UploadResultAdded,
+			wantErr:    nil,
+		},
+		{
+			name: "upload new file when HeadObject returns NoSuchKey",
+			setup: func(t *testing.T) (*S3, S3UploadOptions, func()) {
+				t.Helper()
+
+				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.On("HeadObject", mock.Anything, mock.Anything).Return(&s3.HeadObjectOutput{}, &types.NoSuchKey{})
 				mockS3Client.On("PutObject", mock.Anything, mock.Anything).Return(&s3.PutObjectOutput{}, nil)
 
 				svc := &S3{
@@ -1366,6 +1393,54 @@ func TestS3_UploadStream(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestIsNotFound(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "nil error",
+			err:  nil,
+			want: false,
+		},
+		{
+			name: "NotFound",
+			err:  &types.NotFound{},
+			want: true,
+		},
+		{
+			name: "NoSuchKey",
+			err:  &types.NoSuchKey{},
+			want: true,
+		},
+		{
+			name: "wrapped NotFound",
+			err:  fmt.Errorf("head: %w", &types.NotFound{}),
+			want: true,
+		},
+		{
+			name: "wrapped NoSuchKey",
+			err:  fmt.Errorf("head: %w", &types.NoSuchKey{}),
+			want: true,
+		},
+		{
+			name: "unrelated error",
+			err:  errors.New("some other error"),
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.want, isNotFound(tt.err))
 		})
 	}
 }

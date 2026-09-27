@@ -49,6 +49,21 @@ var (
 // S3 DeleteObjects request.
 const MaxDeleteBatch = 1000
 
+// isNotFound reports whether err indicates that the requested S3 object does
+// not exist. Both *types.NotFound and *types.NoSuchKey are recognized because
+// different S3-compatible servers return different error types for missing
+// objects.
+func isNotFound(err error) bool {
+	var notFound *types.NotFound
+	if errors.As(err, &notFound) {
+		return true
+	}
+
+	var noSuchKey *types.NoSuchKey
+
+	return errors.As(err, &noSuchKey)
+}
+
 // S3UploadOptions configures a single-file upload.
 type S3UploadOptions struct {
 	LocalFilePath   string
@@ -132,8 +147,7 @@ func (u *S3) Upload(ctx context.Context, opt S3UploadOptions) (UploadResult, err
 		Key:    &opt.RemoteObjectKey,
 	})
 	if err != nil {
-		var notFoundErr *types.NotFound
-		if !errors.As(err, &notFoundErr) {
+		if !isNotFound(err) {
 			return "", err
 		}
 
@@ -610,14 +624,10 @@ func (u *S3) UploadStream(ctx context.Context, opt S3UploadStreamOptions) error 
 		Bucket: aws.String(u.Bucket),
 		Key:    aws.String(opt.RemoteObjectKey),
 	}); err != nil {
-		var notFoundErr *types.NotFound
-
-		var noSuchKey *types.NoSuchKey
-
-		if errors.As(err, &notFoundErr) || errors.As(err, &noSuchKey) {
+		if isNotFound(err) {
 			log.Debug().Msgf("object '%s' not found, uploading new object", opt.RemoteObjectKey)
 		} else {
-			log.Debug().Err(err).Msgf("could not check whether object '%s' exists, proceeding", opt.RemoteObjectKey)
+			log.Warn().Err(err).Msgf("could not check whether object '%s' exists, proceeding with upload that may overwrite", opt.RemoteObjectKey)
 		}
 	} else {
 		log.Warn().Msgf("object '%s' already exists and will be overwritten", opt.RemoteObjectKey)
@@ -652,11 +662,7 @@ func (u *S3) DownloadStream(ctx context.Context, opt S3DownloadStreamOptions, w 
 		Key:    aws.String(opt.RemoteObjectKey),
 	})
 	if err != nil {
-		var noSuchKey *types.NoSuchKey
-
-		var notFound *types.NotFound
-
-		if errors.As(err, &noSuchKey) || errors.As(err, &notFound) {
+		if isNotFound(err) {
 			return fmt.Errorf("%w: %s", ErrObjectNotFound, opt.RemoteObjectKey)
 		}
 
