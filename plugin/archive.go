@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog/log"
-	plugin_base "github.com/thegeeklab/wp-plugin-go/v7/plugin"
-	plugin_template "github.com/thegeeklab/wp-plugin-go/v7/template"
+	plugin_base "github.com/thegeeklab/wp-plugin-go/v8/plugin"
+	plugin_template "github.com/thegeeklab/wp-plugin-go/v8/template"
 	"github.com/thegeeklab/wp-s3-action/archive"
 	"github.com/thegeeklab/wp-s3-action/aws"
 )

@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	plugin_base "github.com/thegeeklab/wp-plugin-go/v7/plugin"
+	plugin_base "github.com/thegeeklab/wp-plugin-go/v8/plugin"
 	"github.com/thegeeklab/wp-s3-action/aws"
 	"github.com/thegeeklab/wp-s3-action/aws/mocks"
 )
