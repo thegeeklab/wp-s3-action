@@ -71,7 +71,10 @@ func (p *Plugin) Validate() error {
 		return fmt.Errorf("error while retrieving working directory: %w", err)
 	}
 
-	p.Settings.Source = filepath.Join(wd, p.Settings.Source)
+	if !filepath.IsAbs(p.Settings.Source) {
+		p.Settings.Source = filepath.Join(wd, p.Settings.Source)
+	}
+
 	p.Settings.Target = strings.TrimPrefix(p.Settings.Target, "/")
 
 	if p.Settings.MaxConcurrency < 1 {

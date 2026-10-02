@@ -19,6 +19,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	plugin_base "github.com/thegeeklab/wp-plugin-go/v8/plugin"
+	"github.com/thegeeklab/wp-s3-action/archive"
 	"github.com/thegeeklab/wp-s3-action/aws"
 	"github.com/thegeeklab/wp-s3-action/aws/mocks"
 )
@@ -637,6 +638,52 @@ func TestValidateSource(t *testing.T) {
 	}
 }
 
+func TestValidateSourcePath(t *testing.T) {
+	t.Parallel()
+
+	wd, err := os.Getwd()
+	require.NoError(t, err)
+
+	absSource := filepath.Join(os.TempDir(), "wp-s3-action", "cache", "go")
+
+	tests := []struct {
+		name       string
+		setup      func(t *testing.T) *Settings
+		wantSource string
+	}{
+		{
+			name: "relative source is resolved against working directory",
+			setup: func(t *testing.T) *Settings {
+				t.Helper()
+
+				return &Settings{ActionStrings: []string{"upload"}, MaxConcurrency: 1, Source: "foo"}
+			},
+			wantSource: filepath.Join(wd, "foo"),
+		},
+		{
+			name: "absolute source is preserved",
+			setup: func(t *testing.T) *Settings {
+				t.Helper()
+
+				return &Settings{ActionStrings: []string{"upload"}, MaxConcurrency: 1, Source: absSource}
+			},
+			wantSource: absSource,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			p, _ := newTestPlugin(t.Context(), tt.setup(t))
+
+			require.NoError(t, p.Validate())
+
+			assert.Equal(t, tt.wantSource, p.Settings.Source)
+		})
+	}
+}
+
 func TestCreateUploadJobs(t *testing.T) {
 	t.Parallel()
 
@@ -880,6 +927,31 @@ func TestHandleDownload(t *testing.T) {
 			},
 			wantErr: errMockList,
 		},
+		{
+			name: "sibling-prefix keys are skipped",
+			setup: func(t *testing.T) (*Plugin, *aws.Client, plugin_base.Network) {
+				t.Helper()
+
+				client, mockS3, _ := newMockClient(t)
+				mockS3.On("ListObjects", mock.Anything, mock.Anything).
+					Return(listResult("blog/a.txt", "blogger/x.txt"), nil)
+				mockS3.On("GetObject", mock.Anything, mock.MatchedBy(func(input *s3.GetObjectInput) bool {
+					return awssdk.ToString(input.Key) == "blog/a.txt"
+				})).
+					Return(func(_ context.Context, _ *s3.GetObjectInput, _ ...func(*s3.Options)) *s3.GetObjectOutput {
+						return &s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("body"))}
+					}, nil).Once()
+
+				p, network := newTestPlugin(t.Context(), &Settings{
+					Bucket:         "bucket",
+					Source:         t.TempDir(),
+					Target:         "blog",
+					MaxConcurrency: 1,
+				})
+
+				return p, client, network
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -898,31 +970,6 @@ func TestHandleDownload(t *testing.T) {
 			assert.NoError(t, err)
 		})
 	}
-}
-
-func TestHandleDownloadFiltersSiblingKeys(t *testing.T) {
-	t.Parallel()
-
-	client, mockS3, _ := newMockClient(t)
-	mockS3.On("ListObjects", mock.Anything, mock.Anything).
-		Return(listResult("blog/a.txt", "blogger/x.txt"), nil)
-	mockS3.On("GetObject", mock.Anything, mock.MatchedBy(func(input *s3.GetObjectInput) bool {
-		return awssdk.ToString(input.Key) == "blog/a.txt"
-	})).
-		Return(func(_ context.Context, _ *s3.GetObjectInput, _ ...func(*s3.Options)) *s3.GetObjectOutput {
-			return &s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("body"))}
-		}, nil).Once()
-
-	p, network := newTestPlugin(t.Context(), &Settings{
-		Bucket:         "bucket",
-		Source:         t.TempDir(),
-		Target:         "blog",
-		MaxConcurrency: 1,
-	})
-
-	err := p.handleDownload(network, client.S3)
-	assert.NoError(t, err)
-	mockS3.AssertExpectations(t)
 }
 
 func TestHandleUpload(t *testing.T) {
@@ -1092,4 +1139,292 @@ func TestJobChannelYield(t *testing.T) {
 		err := yield(Job{remote: "k", action: S3ActionDownload})
 		assert.ErrorIs(t, err, context.Canceled)
 	})
+}
+
+func TestValidate(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		settings *Settings
+		wantErr  error
+	}{
+		{
+			name:     "upload action is valid",
+			settings: &Settings{ActionStrings: []string{"upload"}, MaxConcurrency: 1},
+		},
+		{
+			name:     "download action without target",
+			settings: &Settings{ActionStrings: []string{"download"}, MaxConcurrency: 1},
+			wantErr:  ErrDownloadTarget,
+		},
+		{
+			name:     "download action with target",
+			settings: &Settings{ActionStrings: []string{"download"}, Target: "prefix/", MaxConcurrency: 1},
+		},
+		{
+			name:     "download action rejects bucket-root prefix",
+			settings: &Settings{ActionStrings: []string{"download"}, Target: "/", MaxConcurrency: 1},
+			wantErr:  ErrDownloadTarget,
+		},
+		{
+			name:     "delete action without target",
+			settings: &Settings{ActionStrings: []string{"delete"}, MaxConcurrency: 1},
+			wantErr:  ErrTargetNotSet,
+		},
+		{
+			name:     "delete action with target",
+			settings: &Settings{ActionStrings: []string{"delete"}, Target: "prefix/", MaxConcurrency: 1},
+		},
+		{
+			name:     "redirect action without redirects",
+			settings: &Settings{ActionStrings: []string{"redirect"}, MaxConcurrency: 1},
+			wantErr:  ErrRedirectsNotSet,
+		},
+		{
+			name:     "invalidate-cloudfront action without distribution",
+			settings: &Settings{ActionStrings: []string{"invalidate-cloudfront"}, MaxConcurrency: 1},
+			wantErr:  ErrCloudFrontDistribution,
+		},
+		{
+			name:     "unknown action",
+			settings: &Settings{ActionStrings: []string{"bogus"}, MaxConcurrency: 1},
+			wantErr:  ErrActionUnknown,
+		},
+		{
+			name:     "max-concurrency must be at least 1",
+			settings: &Settings{ActionStrings: []string{"upload"}, MaxConcurrency: 0},
+			wantErr:  ErrInvalidMaxConcurrency,
+		},
+		{
+			name:     "negative max-concurrency is rejected",
+			settings: &Settings{ActionStrings: []string{"upload"}, MaxConcurrency: -1},
+			wantErr:  ErrInvalidMaxConcurrency,
+		},
+		{
+			name:     "valid max-concurrency",
+			settings: &Settings{ActionStrings: []string{"upload"}, MaxConcurrency: 4},
+		},
+		{
+			name: "archive upload without target",
+			settings: &Settings{
+				ActionStrings:  []string{"upload"},
+				MaxConcurrency: 1,
+				Archive:        Archive{Enabled: true, Compression: string(archive.CompressionGzip)},
+			},
+			wantErr: ErrArchiveTargetNotSet,
+		},
+		{
+			name: "archive upload with target",
+			settings: &Settings{
+				ActionStrings:  []string{"upload"},
+				Target:         "cache.tar.gz",
+				MaxConcurrency: 1,
+				Archive:        Archive{Enabled: true, Compression: string(archive.CompressionGzip)},
+			},
+		},
+		{
+			name: "archive download with target",
+			settings: &Settings{
+				ActionStrings:  []string{"download"},
+				Target:         "cache.tar.gz",
+				MaxConcurrency: 1,
+				Archive:        Archive{Enabled: true, Compression: string(archive.CompressionGzip)},
+			},
+		},
+		{
+			name: "archive mode rejects non upload/download actions",
+			settings: &Settings{
+				ActionStrings:  []string{"delete"},
+				Target:         "cache.tar.gz",
+				MaxConcurrency: 1,
+				Archive:        Archive{Enabled: true, Compression: string(archive.CompressionGzip)},
+			},
+			wantErr: ErrArchiveUnsupported,
+		},
+		{
+			name: "archive mode rejects invalid compression",
+			settings: &Settings{
+				ActionStrings:  []string{"upload"},
+				Target:         "cache.tar.gz",
+				MaxConcurrency: 1,
+				Archive:        Archive{Enabled: true, Compression: "zstd"},
+			},
+			wantErr: archive.ErrInvalidCompression,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			p := &Plugin{Settings: tt.settings}
+
+			err := p.Validate()
+
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+
+				return
+			}
+
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestRemoteKeyToLocalPath(t *testing.T) {
+	t.Parallel()
+
+	source := t.TempDir()
+
+	tests := []struct {
+		name      string
+		remoteKey string
+		target    string
+		source    string
+		want      string
+		wantErr   error
+	}{
+		{
+			name:      "strip target prefix",
+			remoteKey: "foo/bar.txt",
+			target:    "foo",
+			source:    source,
+			want:      filepath.Join(source, "bar.txt"),
+		},
+		{
+			name:      "keep sibling key sharing target string prefix",
+			remoteKey: "foobar/bar.txt",
+			target:    "foo",
+			source:    source,
+			want:      filepath.Join(source, "foobar", "bar.txt"),
+		},
+		{
+			name:      "empty target",
+			remoteKey: "bar.txt",
+			target:    "",
+			source:    source,
+			want:      filepath.Join(source, "bar.txt"),
+		},
+		{
+			name:      "target with trailing slash",
+			remoteKey: "foo/bar.txt",
+			target:    "foo/",
+			source:    source,
+			want:      filepath.Join(source, "bar.txt"),
+		},
+		{
+			name:      "reject path traversal",
+			remoteKey: "../etc/passwd",
+			target:    "",
+			source:    source,
+			wantErr:   ErrPathTraversal,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := remoteKeyToLocalPath(tt.remoteKey, tt.target, tt.source)
+
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestRemoteKeyToLocalPathSymlink(t *testing.T) {
+	t.Parallel()
+
+	source := t.TempDir()
+	outside := t.TempDir()
+
+	require.NoError(t, os.Symlink(outside, filepath.Join(source, "link")))
+
+	_, err := remoteKeyToLocalPath("link/passwd", "", source)
+	assert.ErrorIs(t, err, ErrPathTraversal)
+}
+
+func TestPathWithinRoot(t *testing.T) {
+	t.Parallel()
+
+	missingRoot := filepath.Join(t.TempDir(), "does-not-exist")
+	containingRoot := t.TempDir()
+
+	sibling := t.TempDir()
+	require.NoError(t, os.Symlink(sibling, filepath.Join(containingRoot, "escape")))
+
+	tests := []struct {
+		name string
+		root string
+		path string
+		want bool
+	}{
+		{
+			name: "missing root is not contained",
+			root: missingRoot,
+			path: "/etc/passwd",
+			want: false,
+		},
+		{
+			name: "existing root contains its descendant",
+			root: containingRoot,
+			path: filepath.Join(containingRoot, "sub", "file.txt"),
+			want: true,
+		},
+		{
+			name: "path outside root is not contained",
+			root: containingRoot,
+			path: filepath.Join(missingRoot, "file.txt"),
+			want: false,
+		},
+		{
+			name: "non-existent leaf under root is allowed (to be created)",
+			root: containingRoot,
+			path: filepath.Join(containingRoot, "newdir", "file.txt"),
+			want: true,
+		},
+		{
+			name: "leaf resolves through symlinked intermediate to escape root",
+			root: containingRoot,
+			path: filepath.Join(containingRoot, "escape", "file.txt"),
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, tt.want, pathWithinRoot(tt.root, tt.path))
+		})
+	}
+}
+
+func TestRunJobsUnknownAction(t *testing.T) {
+	t.Parallel()
+
+	p := &Plugin{
+		Settings: &Settings{
+			Bucket:         "test-bucket",
+			MaxConcurrency: 1,
+		},
+	}
+
+	jobs := make(chan Job, 1)
+	jobs <- Job{local: "x", remote: "y", action: S3Action("bogus")}
+
+	close(jobs)
+
+	err := p.runJobs(t.Context(), nil, S3Action("bogus"), jobs)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "bogus")
 }
