@@ -12,8 +12,8 @@ import (
 	"os"
 	"text/template"
 
-	plugin_docs "github.com/thegeeklab/wp-plugin-go/v7/docs"
-	plugin_template "github.com/thegeeklab/wp-plugin-go/v7/template"
+	plugin_docs "github.com/thegeeklab/wp-plugin-go/v8/docs"
+	plugin_template "github.com/thegeeklab/wp-plugin-go/v8/template"
 	"github.com/thegeeklab/wp-s3-action/plugin"
 )
 
