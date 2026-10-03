@@ -9,8 +9,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-
-	"github.com/mattn/go-isatty"
 )
 
 // ResultStatus describes the outcome of a single processed job.
@@ -44,21 +42,21 @@ type Summary struct {
 	Redirected int
 }
 
-// String renders the summary in a stable order and reports "no changes"
+// String renders the summary in a declarative style and reports "no changes"
 // when every counter is zero.
 func (s Summary) String() string {
 	parts := make([]string, 0)
 
 	if s.Added > 0 {
-		parts = append(parts, fmt.Sprintf("%d added", s.Added))
+		parts = append(parts, fmt.Sprintf("%d to add", s.Added))
 	}
 
 	if s.Modified > 0 {
-		parts = append(parts, fmt.Sprintf("%d modified", s.Modified))
+		parts = append(parts, fmt.Sprintf("%d to change", s.Modified))
 	}
 
 	if s.Updated > 0 {
-		parts = append(parts, fmt.Sprintf("%d updated", s.Updated))
+		parts = append(parts, fmt.Sprintf("%d to update", s.Updated))
 	}
 
 	if s.Skipped > 0 {
@@ -66,15 +64,15 @@ func (s Summary) String() string {
 	}
 
 	if s.Deleted > 0 {
-		parts = append(parts, fmt.Sprintf("%d deleted", s.Deleted))
+		parts = append(parts, fmt.Sprintf("%d to destroy", s.Deleted))
 	}
 
 	if s.Downloaded > 0 {
-		parts = append(parts, fmt.Sprintf("%d downloaded", s.Downloaded))
+		parts = append(parts, fmt.Sprintf("%d to download", s.Downloaded))
 	}
 
 	if s.Redirected > 0 {
-		parts = append(parts, fmt.Sprintf("%d redirected", s.Redirected))
+		parts = append(parts, fmt.Sprintf("%d to redirect", s.Redirected))
 	}
 
 	if len(parts) == 0 {
@@ -85,23 +83,14 @@ func (s Summary) String() string {
 }
 
 // colorsEnabled determines whether ANSI color codes should be emitted.
-// The function respects the NO_COLOR and FORCE_COLOR environment variables,
-// with NO_COLOR taking precedence. When neither is set, TTY detection is
-// used to determine output capabilities.
+// Colors are enabled by default and can be disabled by setting the NO_COLOR
+// environment variable.
 func colorsEnabled() bool {
 	if v, ok := os.LookupEnv("NO_COLOR"); ok && v != "" {
 		return false
 	}
 
-	if v, ok := os.LookupEnv("FORCE_COLOR"); ok && v != "" {
-		if v == "0" || strings.EqualFold(v, "false") {
-			return false
-		}
-
-		return true
-	}
-
-	return isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())
+	return true
 }
 
 // symbol returns the single-character marker used in the diff listing for
@@ -235,7 +224,7 @@ func (c *resultCollector) renderColored(action S3Action, colored bool) []string 
 		lines = append(lines, fmt.Sprintf("%s %s", r.Status.symbol(colored), r.Path))
 	}
 
-	lines = append(lines, fmt.Sprintf("%s summary: %s", action, c.summary()))
+	lines = append(lines, fmt.Sprintf("%s: %s", action, c.summary()))
 
 	return lines
 }

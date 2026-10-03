@@ -193,6 +193,12 @@ steps:
       path_style: true
 ```
 
+### Output
+
+The plugin logs each file operation with a status marker (`+` for additions, `-` for deletions, `~` for modifications, `>` for redirects) and prints a summary line at the end of each action showing the total counts (for example, `upload: 3 to add, 1 to destroy`). When all counters are zero, the summary reports `no changes`.
+
+ANSI color codes are enabled by default. Set the `NO_COLOR` environment variable to any non-empty value to disable colored output.
+
 ## Build
 
 Build the binary with the following command:

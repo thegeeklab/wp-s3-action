@@ -79,12 +79,12 @@ func TestSummaryString(t *testing.T) {
 		{
 			name:    "single counter",
 			summary: Summary{Added: 3},
-			want:    "3 added",
+			want:    "3 to add",
 		},
 		{
 			name:    "multiple counters in stable order",
 			summary: Summary{Added: 3, Skipped: 5, Modified: 1},
-			want:    "3 added, 1 modified, 5 skipped",
+			want:    "3 to add, 1 to change, 5 skipped",
 		},
 	}
 
@@ -218,7 +218,7 @@ func TestResultCollectorRender(t *testing.T) {
 			name:    "no results renders only the summary",
 			results: nil,
 			action:  S3ActionUpload,
-			want:    []string{"upload summary: no changes"},
+			want:    []string{"upload: no changes"},
 		},
 		{
 			name: "changed results are sorted by path before the summary",
@@ -231,7 +231,7 @@ func TestResultCollectorRender(t *testing.T) {
 			want: []string{
 				"- a.txt",
 				"+ b.txt",
-				"upload summary: 1 added, 1 skipped, 1 deleted",
+				"upload: 1 to add, 1 skipped, 1 to destroy",
 			},
 		},
 		{
@@ -244,7 +244,7 @@ func TestResultCollectorRender(t *testing.T) {
 			want: []string{
 				"+ x",
 				"- x",
-				"delete summary: 1 added, 1 deleted",
+				"delete: 1 to add, 1 to destroy",
 			},
 		},
 	}
@@ -310,8 +310,6 @@ func TestColorsEnabled(t *testing.T) {
 		name       string
 		setNoColor bool
 		noColor    string
-		setForce   bool
-		forceColor string
 		want       bool
 	}{
 		{
@@ -324,47 +322,18 @@ func TestColorsEnabled(t *testing.T) {
 			name:       "NO_COLOR empty string does not disable colors",
 			setNoColor: true,
 			noColor:    "",
-			setForce:   true,
-			forceColor: "1",
 			want:       true,
 		},
 		{
-			name:       "NO_COLOR takes precedence over FORCE_COLOR",
+			name:       "NO_COLOR any value disables colors",
 			setNoColor: true,
-			noColor:    "1",
-			setForce:   true,
-			forceColor: "1",
+			noColor:    "true",
 			want:       false,
 		},
 		{
-			name:       "FORCE_COLOR enables colors",
-			setForce:   true,
-			forceColor: "1",
+			name:       "default enables colors",
+			setNoColor: false,
 			want:       true,
-		},
-		{
-			name:       "FORCE_COLOR true enables colors",
-			setForce:   true,
-			forceColor: "true",
-			want:       true,
-		},
-		{
-			name:       "FORCE_COLOR 0 disables colors",
-			setForce:   true,
-			forceColor: "0",
-			want:       false,
-		},
-		{
-			name:       "FORCE_COLOR false disables colors",
-			setForce:   true,
-			forceColor: "false",
-			want:       false,
-		},
-		{
-			name:       "FORCE_COLOR FALSE disables colors case-insensitively",
-			setForce:   true,
-			forceColor: "FALSE",
-			want:       false,
 		},
 	}
 
@@ -374,12 +343,6 @@ func TestColorsEnabled(t *testing.T) {
 				t.Setenv("NO_COLOR", tt.noColor)
 			} else {
 				t.Setenv("NO_COLOR", "")
-			}
-
-			if tt.setForce {
-				t.Setenv("FORCE_COLOR", tt.forceColor)
-			} else {
-				t.Setenv("FORCE_COLOR", "")
 			}
 
 			assert.Equal(t, tt.want, colorsEnabled())
@@ -398,7 +361,7 @@ func TestResultCollectorLog(t *testing.T) {
 			name:    "no results writes only the summary",
 			results: nil,
 			action:  S3ActionUpload,
-			want:    "upload summary: no changes\n",
+			want:    "upload: no changes\n",
 		},
 		{
 			name: "changed results are written to output writer",
@@ -407,7 +370,7 @@ func TestResultCollectorLog(t *testing.T) {
 				{Status: StatusDeleted, Path: "a.txt"},
 			},
 			action: S3ActionUpload,
-			want:   "- a.txt\n+ b.txt\nupload summary: 1 added, 1 deleted\n",
+			want:   "- a.txt\n+ b.txt\nupload: 1 to add, 1 to destroy\n",
 		},
 	}
 
