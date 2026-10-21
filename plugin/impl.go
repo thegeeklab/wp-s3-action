@@ -318,7 +318,9 @@ func (p *Plugin) runActionJobs(
 	}()
 
 	if err := p.runJobs(network.Context, s3, action, jobs); err != nil {
-		<-buildErr
+		if buildErr := <-buildErr; buildErr != nil {
+			log.Debug().Err(buildErr).Msgf("error while building %s jobs", action)
+		}
 
 		return fmt.Errorf("error while running %s jobs: %w", action, err)
 	}
