@@ -30,6 +30,7 @@ type Settings struct {
 	Region              string
 	Source              string
 	Target              string
+	RestoreKeys         []string
 	Redirects           map[string]string
 	DryRun              bool
 	PathStyle           bool
@@ -238,6 +239,21 @@ func Flags(settings *Settings, category string) []cli.Flag {
 				return compression.Set(s)
 			},
 			Category: category,
+		},
+		// Ordered list of key prefixes used by the archive `download` action when the
+		// exact `target` object does not exist. Each entry is passed as the `Prefix`
+		// of a `ListObjectsV2` call and the most recently modified object under that
+		// prefix is restored. Prefixes are tried in order and the first one that
+		// yields an object wins. This lets a cache keyed on a lockfile hash fall back
+		// to the previous snapshot instead of starting cold. Only used by `download`;
+		// `upload` still writes a single concrete `target` key. Requires the
+		// `s3:ListBucket` permission on the configured prefixes.
+		&cli.StringSliceFlag{
+			Name:        "restore-keys",
+			Usage:       "prefix fallbacks for archive cache downloads",
+			Sources:     cli.EnvVars("PLUGIN_RESTORE_KEYS"),
+			Destination: &settings.RestoreKeys,
+			Category:    category,
 		},
 		// Delete remote files that are not present in the local source directory during
 		// upload.

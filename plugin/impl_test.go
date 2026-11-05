@@ -1273,6 +1273,54 @@ func TestValidate(t *testing.T) {
 	}
 }
 
+func TestValidateRestoreKeys(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		in   []string
+		want []string
+	}{
+		{
+			name: "leading slash is stripped",
+			in:   []string{"/cache/", "other/"},
+			want: []string{"cache/", "other/"},
+		},
+		{
+			name: "no leading slash is preserved",
+			in:   []string{"cache/", "other/"},
+			want: []string{"cache/", "other/"},
+		},
+		{
+			name: "empty list stays empty",
+			in:   nil,
+			want: nil,
+		},
+		{
+			name: "empty and slash-only keys are filtered",
+			in:   []string{"", "/", "cache/", "other/"},
+			want: []string{"cache/", "other/"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			p := &Plugin{Settings: &Settings{
+				ActionStrings:  []string{"download"},
+				Target:         "cache.tar.gz",
+				MaxConcurrency: 1,
+				RestoreKeys:    tt.in,
+				Archive:        Archive{Enabled: true, Compression: string(archive.CompressionGzip)},
+			}}
+
+			require.NoError(t, p.Validate())
+			assert.Equal(t, tt.want, p.Settings.RestoreKeys)
+		})
+	}
+}
+
 func TestRemoteKeyToLocalPath(t *testing.T) {
 	t.Parallel()
 

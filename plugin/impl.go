@@ -77,6 +77,8 @@ func (p *Plugin) Validate() error {
 
 	p.Settings.Target = strings.TrimPrefix(p.Settings.Target, "/")
 
+	p.normalizeRestoreKeys()
+
 	if p.Settings.MaxConcurrency < 1 {
 		return ErrInvalidMaxConcurrency
 	}
@@ -129,6 +131,25 @@ func (p *Plugin) Validate() error {
 	}
 
 	return nil
+}
+
+// normalizeRestoreKeys strips leading slashes from restore keys and removes
+// entries that are empty after stripping, which would otherwise be passed to
+// ListObjectsV2 as an empty prefix and list the entire bucket.
+func (p *Plugin) normalizeRestoreKeys() {
+	keys := p.Settings.RestoreKeys[:0]
+
+	for _, key := range p.Settings.RestoreKeys {
+		key = strings.TrimPrefix(key, "/")
+
+		if key == "" {
+			continue
+		}
+
+		keys = append(keys, key)
+	}
+
+	p.Settings.RestoreKeys = keys
 }
 
 // Execute provides the implementation of the plugin.

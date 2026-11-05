@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	awssdk "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -296,6 +297,234 @@ func TestHandleArchiveDownload(t *testing.T) {
 				return p, client, network, func() {}
 			},
 			wantErr: errMockGet,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			p, client, network, teardown := tt.setup(t)
+			defer teardown()
+
+			err := p.handleArchiveDownload(network.Context, *network.Client, plugin_base.Metadata{}, client.S3)
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+
+				return
+			}
+
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestHandleArchiveDownloadRestoreKeys(t *testing.T) {
+	t.Parallel()
+
+	newest := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+
+	archiveBody := func(t *testing.T) []byte {
+		t.Helper()
+
+		src := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(src, "a.txt"), []byte("hello"), 0o600))
+
+		var buf bytes.Buffer
+		require.NoError(t, archive.Create(t.Context(), src, &buf, archive.CompressionGzip))
+
+		return buf.Bytes()
+	}
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) (*Plugin, *aws.Client, plugin_base.Network, func())
+		wantErr error
+	}{
+		{
+			name: "restores newest object under the first matching restore key",
+			setup: func(t *testing.T) (*Plugin, *aws.Client, plugin_base.Network, func()) {
+				t.Helper()
+
+				body := archiveBody(t)
+
+				client, mockS3, _ := newMockClient(t)
+				mockS3.On("GetObject", mock.Anything, mock.MatchedBy(func(input *s3.GetObjectInput) bool {
+					return awssdk.ToString(input.Key) == "cache/current.tar.gz"
+				})).Return(&s3.GetObjectOutput{}, &types.NoSuchKey{}).Once()
+				mockS3.On("ListObjectsV2", mock.Anything, mock.MatchedBy(func(input *s3.ListObjectsV2Input) bool {
+					return awssdk.ToString(input.Prefix) == "cache/"
+				})).Return(&s3.ListObjectsV2Output{
+					Contents: []types.Object{
+						{
+							Key:          awssdk.String("cache/older.tar.gz"),
+							LastModified: awssdk.Time(time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)),
+						},
+						{Key: awssdk.String("cache/newest.tar.gz"), LastModified: &newest},
+					},
+					IsTruncated: awssdk.Bool(false),
+				}, nil).Once()
+				mockS3.On("GetObject", mock.Anything, mock.MatchedBy(func(input *s3.GetObjectInput) bool {
+					return awssdk.ToString(input.Key) == "cache/newest.tar.gz"
+				})).Return(&s3.GetObjectOutput{
+					Body: io.NopCloser(bytes.NewReader(body)),
+				}, nil).Once()
+
+				dest := t.TempDir()
+
+				p, network := newTestPlugin(t.Context(), &Settings{
+					Bucket:      "bucket",
+					Source:      dest,
+					Target:      "cache/current.tar.gz",
+					RestoreKeys: []string{"cache/"},
+					Archive:     Archive{Enabled: true, Compression: string(archive.CompressionGzip)},
+				})
+
+				return p, client, network, func() {
+					mockS3.AssertExpectations(t)
+
+					got, err := os.ReadFile(filepath.Join(dest, "a.txt"))
+					require.NoError(t, err)
+					assert.Equal(t, "hello", string(got))
+				}
+			},
+		},
+		{
+			name: "exact target hit skips restore key listing",
+			setup: func(t *testing.T) (*Plugin, *aws.Client, plugin_base.Network, func()) {
+				t.Helper()
+
+				body := archiveBody(t)
+
+				client, mockS3, _ := newMockClient(t)
+				mockS3.On("GetObject", mock.Anything, mock.MatchedBy(func(input *s3.GetObjectInput) bool {
+					return awssdk.ToString(input.Key) == "cache/current.tar.gz"
+				})).Return(&s3.GetObjectOutput{
+					Body: io.NopCloser(bytes.NewReader(body)),
+				}, nil).Once()
+				mockS3.AssertNotCalled(t, "ListObjectsV2", mock.Anything, mock.Anything)
+
+				dest := t.TempDir()
+
+				p, network := newTestPlugin(t.Context(), &Settings{
+					Bucket:      "bucket",
+					Source:      dest,
+					Target:      "cache/current.tar.gz",
+					RestoreKeys: []string{"cache/"},
+					Archive:     Archive{Enabled: true, Compression: string(archive.CompressionGzip)},
+				})
+
+				return p, client, network, func() {
+					mockS3.AssertExpectations(t)
+
+					got, err := os.ReadFile(filepath.Join(dest, "a.txt"))
+					require.NoError(t, err)
+					assert.Equal(t, "hello", string(got))
+				}
+			},
+		},
+		{
+			name: "tries restore keys in order until one matches",
+			setup: func(t *testing.T) (*Plugin, *aws.Client, plugin_base.Network, func()) {
+				t.Helper()
+
+				body := archiveBody(t)
+
+				client, mockS3, _ := newMockClient(t)
+				mockS3.On("GetObject", mock.Anything, mock.MatchedBy(func(input *s3.GetObjectInput) bool {
+					return awssdk.ToString(input.Key) == "cache/current.tar.gz"
+				})).Return(&s3.GetObjectOutput{}, &types.NoSuchKey{}).Once()
+				mockS3.On("ListObjectsV2", mock.Anything, mock.MatchedBy(func(input *s3.ListObjectsV2Input) bool {
+					return awssdk.ToString(input.Prefix) == "missing/"
+				})).Return(&s3.ListObjectsV2Output{
+					Contents:    []types.Object{},
+					IsTruncated: awssdk.Bool(false),
+				}, nil).Once()
+				mockS3.On("ListObjectsV2", mock.Anything, mock.MatchedBy(func(input *s3.ListObjectsV2Input) bool {
+					return awssdk.ToString(input.Prefix) == "cache/"
+				})).Return(&s3.ListObjectsV2Output{
+					Contents: []types.Object{
+						{Key: awssdk.String("cache/newest.tar.gz"), LastModified: &newest},
+					},
+					IsTruncated: awssdk.Bool(false),
+				}, nil).Once()
+				mockS3.On("GetObject", mock.Anything, mock.MatchedBy(func(input *s3.GetObjectInput) bool {
+					return awssdk.ToString(input.Key) == "cache/newest.tar.gz"
+				})).Return(&s3.GetObjectOutput{
+					Body: io.NopCloser(bytes.NewReader(body)),
+				}, nil).Once()
+
+				dest := t.TempDir()
+
+				p, network := newTestPlugin(t.Context(), &Settings{
+					Bucket:      "bucket",
+					Source:      dest,
+					Target:      "cache/current.tar.gz",
+					RestoreKeys: []string{"missing/", "cache/"},
+					Archive:     Archive{Enabled: true, Compression: string(archive.CompressionGzip)},
+				})
+
+				return p, client, network, func() {
+					mockS3.AssertExpectations(t)
+
+					got, err := os.ReadFile(filepath.Join(dest, "a.txt"))
+					require.NoError(t, err)
+					assert.Equal(t, "hello", string(got))
+				}
+			},
+		},
+		{
+			name: "no matching object is a no-op",
+			setup: func(t *testing.T) (*Plugin, *aws.Client, plugin_base.Network, func()) {
+				t.Helper()
+
+				client, mockS3, _ := newMockClient(t)
+				mockS3.On("GetObject", mock.Anything, mock.MatchedBy(func(input *s3.GetObjectInput) bool {
+					return awssdk.ToString(input.Key) == "cache/current.tar.gz"
+				})).Return(&s3.GetObjectOutput{}, &types.NoSuchKey{}).Once()
+				mockS3.On("ListObjectsV2", mock.Anything, mock.Anything).Return(&s3.ListObjectsV2Output{
+					Contents:    []types.Object{},
+					IsTruncated: awssdk.Bool(false),
+				}, nil).Once()
+
+				dest := t.TempDir()
+
+				p, network := newTestPlugin(t.Context(), &Settings{
+					Bucket:      "bucket",
+					Source:      dest,
+					Target:      "cache/current.tar.gz",
+					RestoreKeys: []string{"cache/"},
+					Archive:     Archive{Enabled: true, Compression: string(archive.CompressionGzip)},
+				})
+
+				return p, client, network, func() {
+					mockS3.AssertExpectations(t)
+				}
+			},
+		},
+		{
+			name: "list error propagates",
+			setup: func(t *testing.T) (*Plugin, *aws.Client, plugin_base.Network, func()) {
+				t.Helper()
+
+				client, mockS3, _ := newMockClient(t)
+				mockS3.On("GetObject", mock.Anything, mock.MatchedBy(func(input *s3.GetObjectInput) bool {
+					return awssdk.ToString(input.Key) == "cache/current.tar.gz"
+				})).Return(&s3.GetObjectOutput{}, &types.NoSuchKey{}).Once()
+				mockS3.On("ListObjectsV2", mock.Anything, mock.Anything).
+					Return(&s3.ListObjectsV2Output{}, errMockList)
+
+				p, network := newTestPlugin(t.Context(), &Settings{
+					Bucket:      "bucket",
+					Source:      t.TempDir(),
+					Target:      "cache/current.tar.gz",
+					RestoreKeys: []string{"cache/"},
+					Archive:     Archive{Enabled: true, Compression: string(archive.CompressionGzip)},
+				})
+
+				return p, client, network, func() {}
+			},
+			wantErr: errMockList,
 		},
 	}
 

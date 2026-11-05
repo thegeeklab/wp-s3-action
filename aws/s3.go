@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
@@ -741,5 +742,61 @@ func (u *S3) List(ctx context.Context, opt S3ListOptions, fn func(string) error)
 		}
 
 		input.Marker = aws.String(*resp.Contents[len(resp.Contents)-1].Key)
+	}
+}
+
+// LatestObject returns the key of the most recently modified object under the
+// given prefix, or an empty string when the prefix matches no objects. S3 lists
+// keys in lexicographic order rather than by modification time, so every page
+// is scanned and compared by LastModified. Keys that end in a slash are
+// directory markers and are ignored.
+func (u *S3) LatestObject(ctx context.Context, prefix string) (string, error) {
+	input := &s3.ListObjectsV2Input{
+		Bucket: aws.String(u.Bucket),
+		Prefix: aws.String(prefix),
+	}
+
+	var (
+		latest    string
+		latestMod time.Time
+	)
+
+	for {
+		resp, err := u.client.ListObjectsV2(ctx, input)
+		if err != nil {
+			return "", err
+		}
+
+		for _, item := range resp.Contents {
+			key := aws.ToString(item.Key)
+			if key == "" || strings.HasSuffix(key, "/") {
+				continue
+			}
+
+			mod := time.Time{}
+			if item.LastModified != nil {
+				mod = *item.LastModified
+			}
+
+			if latest == "" || mod.After(latestMod) {
+				latest = key
+				latestMod = mod
+			}
+		}
+
+		truncated := resp.IsTruncated != nil && *resp.IsTruncated
+		if !truncated {
+			return latest, nil
+		}
+
+		if len(resp.Contents) == 0 {
+			return "", fmt.Errorf("%w: server reported truncated response with empty page", ErrListPagination)
+		}
+
+		if resp.NextContinuationToken == nil || *resp.NextContinuationToken == "" {
+			return "", fmt.Errorf("%w: server reported truncated response without continuation token", ErrListPagination)
+		}
+
+		input.ContinuationToken = resp.NextContinuationToken
 	}
 }
