@@ -77,6 +77,18 @@ func (p *Plugin) Validate() error {
 
 	p.Settings.Target = strings.TrimPrefix(p.Settings.Target, "/")
 
+	keys := p.Settings.RestoreKeys[:0]
+	for _, key := range p.Settings.RestoreKeys {
+		key = strings.TrimPrefix(key, "/")
+
+		if key == "" {
+			continue
+		}
+
+		keys = append(keys, key)
+	}
+	p.Settings.RestoreKeys = keys
+
 	if p.Settings.MaxConcurrency < 1 {
 		return ErrInvalidMaxConcurrency
 	}

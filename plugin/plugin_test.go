@@ -233,6 +233,46 @@ func TestRedirectsFlag(t *testing.T) {
 	}
 }
 
+func TestRestoreKeysFlag(t *testing.T) {
+	tests := []struct {
+		name string
+		envs map[string]string
+		want []string
+	}{
+		{
+			name: "unset restore keys",
+			envs: map[string]string{},
+			want: []string{},
+		},
+		{
+			name: "single restore key",
+			envs: map[string]string{
+				"PLUGIN_RESTORE_KEYS": "cache/",
+			},
+			want: []string{"cache/"},
+		},
+		{
+			name: "multiple restore keys",
+			envs: map[string]string{
+				"PLUGIN_RESTORE_KEYS": "missing/,cache/",
+			},
+			want: []string{"missing/", "cache/"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for key, value := range tt.envs {
+				t.Setenv(key, value)
+			}
+
+			got, _ := setupPluginTest(t)
+
+			assert.Equal(t, tt.want, got.Settings.RestoreKeys)
+		})
+	}
+}
+
 func TestChecksumCalculationFlag(t *testing.T) {
 	tests := []struct {
 		name    string

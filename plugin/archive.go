@@ -110,13 +110,69 @@ func (p *Plugin) handleArchiveDownload(
 		return fmt.Errorf("create source directory: %w", err)
 	}
 
+	found, err := p.downloadArchiveObject(ctx, s3, target, compression)
+	if err != nil {
+		return err
+	}
+
+	if found {
+		log.Info().Msgf("archive extracted 's3://%s/%s' to '%s'",
+			p.Settings.Bucket, target, p.Settings.Source)
+
+		return nil
+	}
+
+	log.Debug().Msgf("archive object 's3://%s/%s' not found, trying restore keys", p.Settings.Bucket, target)
+
+	for _, prefix := range p.Settings.RestoreKeys {
+		key, err := s3.LatestObject(ctx, prefix)
+		if err != nil {
+			return fmt.Errorf("list restore key '%s': %w", prefix, err)
+		}
+
+		if key == "" {
+			log.Debug().Msgf("no archive object found for restore key '%s'", prefix)
+
+			continue
+		}
+
+		log.Debug().Msgf("restoring most recent archive 's3://%s/%s' for restore key '%s'", p.Settings.Bucket, key, prefix)
+
+		found, err := p.downloadArchiveObject(ctx, s3, key, compression)
+		if err != nil {
+			return err
+		}
+
+		if found {
+			log.Info().Msgf("archive restored 's3://%s/%s' to '%s'",
+				p.Settings.Bucket, key, p.Settings.Source)
+
+			return nil
+		}
+	}
+
+	log.Debug().Msgf("no archive object found for target or restore keys, skipping download")
+
+	return nil
+}
+
+// downloadArchiveObject streams the archive object at key and extracts it into
+// the source directory. It reports whether the object existed; a missing object
+// is not an error and simply yields found=false so callers can fall through to
+// the next candidate key.
+func (p *Plugin) downloadArchiveObject(
+	ctx context.Context,
+	s3 S3Runner,
+	key string,
+	compression archive.Compression,
+) (bool, error) {
 	pr, pw := io.Pipe()
 
 	go func() {
 		defer pw.Close()
 
 		if err := s3.DownloadStream(ctx, aws.S3DownloadStreamOptions{
-			RemoteObjectKey: target,
+			RemoteObjectKey: key,
 		}, pw); err != nil {
 			_ = pw.CloseWithError(fmt.Errorf("download archive: %w", err))
 		}
@@ -126,20 +182,15 @@ func (p *Plugin) handleArchiveDownload(
 		if errors.Is(err, aws.ErrObjectNotFound) {
 			_ = pr.Close()
 
-			log.Debug().Msgf("archive object 's3://%s/%s' not found, skipping download", p.Settings.Bucket, target)
-
-			return nil
+			return false, nil
 		}
 
 		_ = pr.CloseWithError(fmt.Errorf("extract archive: %w", err))
 
-		return err
+		return false, err
 	}
 
-	log.Info().Msgf("archive extracted 's3://%s/%s' to '%s'",
-		p.Settings.Bucket, target, p.Settings.Source)
-
-	return nil
+	return true, nil
 }
 
 // archiveCompression parses the configured compression algorithm.

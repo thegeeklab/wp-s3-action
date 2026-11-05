@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -1473,6 +1474,173 @@ func TestIsNotFound(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			assert.Equal(t, tt.want, isNotFound(tt.err))
+		})
+	}
+}
+
+func TestS3_LatestObject(t *testing.T) {
+	t.Parallel()
+
+	newer := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	older := time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) (*S3, string, func())
+		want    string
+		wantErr error
+	}{
+		{
+			name: "returns the most recently modified object key",
+			setup: func(t *testing.T) (*S3, string, func()) {
+				t.Helper()
+
+				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.On("ListObjectsV2", mock.Anything, mock.Anything).Return(&s3.ListObjectsV2Output{
+					Contents: []types.Object{
+						{Key: aws.String("cache/a.tar.gz"), LastModified: &older},
+						{Key: aws.String("cache/b.tar.gz"), LastModified: &newer},
+						{Key: aws.String("cache/c.tar.gz"), LastModified: &older},
+					},
+					IsTruncated: aws.Bool(false),
+				}, nil)
+
+				return &S3{client: mockS3Client, Bucket: "test-bucket"}, "cache/", func() {
+					mockS3Client.AssertExpectations(t)
+				}
+			},
+			want: "cache/b.tar.gz",
+		},
+		{
+			name: "skips directory markers when selecting the newest object",
+			setup: func(t *testing.T) (*S3, string, func()) {
+				t.Helper()
+
+				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.On("ListObjectsV2", mock.Anything, mock.Anything).Return(&s3.ListObjectsV2Output{
+					Contents: []types.Object{
+						{Key: aws.String("cache/dir/"), LastModified: &newer},
+						{Key: aws.String("cache/a.tar.gz"), LastModified: &older},
+					},
+					IsTruncated: aws.Bool(false),
+				}, nil)
+
+				return &S3{client: mockS3Client, Bucket: "test-bucket"}, "cache/", func() {
+					mockS3Client.AssertExpectations(t)
+				}
+			},
+			want: "cache/a.tar.gz",
+		},
+		{
+			name: "picks newest across paginated pages",
+			setup: func(t *testing.T) (*S3, string, func()) {
+				t.Helper()
+
+				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.On("ListObjectsV2", mock.Anything, mock.MatchedBy(func(input *s3.ListObjectsV2Input) bool {
+					return input.ContinuationToken == nil
+				})).Return(&s3.ListObjectsV2Output{
+					Contents: []types.Object{
+						{Key: aws.String("cache/a.tar.gz"), LastModified: &older},
+					},
+					IsTruncated:           aws.Bool(true),
+					NextContinuationToken: aws.String("token"),
+				}, nil)
+				mockS3Client.On("ListObjectsV2", mock.Anything, mock.MatchedBy(func(input *s3.ListObjectsV2Input) bool {
+					return aws.ToString(input.ContinuationToken) == "token"
+				})).Return(&s3.ListObjectsV2Output{
+					Contents: []types.Object{
+						{Key: aws.String("cache/b.tar.gz"), LastModified: &newer},
+					},
+					IsTruncated: aws.Bool(false),
+				}, nil)
+
+				return &S3{client: mockS3Client, Bucket: "test-bucket"}, "cache/", func() {
+					mockS3Client.AssertExpectations(t)
+				}
+			},
+			want: "cache/b.tar.gz",
+		},
+		{
+			name: "empty result returns empty key",
+			setup: func(t *testing.T) (*S3, string, func()) {
+				t.Helper()
+
+				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.On("ListObjectsV2", mock.Anything, mock.Anything).Return(&s3.ListObjectsV2Output{
+					Contents:    []types.Object{},
+					IsTruncated: aws.Bool(false),
+				}, nil)
+
+				return &S3{client: mockS3Client, Bucket: "test-bucket"}, "cache/", func() {
+					mockS3Client.AssertExpectations(t)
+				}
+			},
+			want: "",
+		},
+		{
+			name: "propagates list error",
+			setup: func(t *testing.T) (*S3, string, func()) {
+				t.Helper()
+
+				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.On("ListObjectsV2", mock.Anything, mock.Anything).
+					Return(&s3.ListObjectsV2Output{}, ErrListObjects)
+
+				return &S3{client: mockS3Client, Bucket: "test-bucket"}, "cache/", func() {}
+			},
+			wantErr: ErrListObjects,
+		},
+		{
+			name: "rejects truncated response with empty page",
+			setup: func(t *testing.T) (*S3, string, func()) {
+				t.Helper()
+
+				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.On("ListObjectsV2", mock.Anything, mock.Anything).Return(&s3.ListObjectsV2Output{
+					Contents:    []types.Object{},
+					IsTruncated: aws.Bool(true),
+				}, nil)
+
+				return &S3{client: mockS3Client, Bucket: "test-bucket"}, "cache/", func() {}
+			},
+			wantErr: ErrListPagination,
+		},
+		{
+			name: "rejects truncated response without continuation token",
+			setup: func(t *testing.T) (*S3, string, func()) {
+				t.Helper()
+
+				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.On("ListObjectsV2", mock.Anything, mock.Anything).Return(&s3.ListObjectsV2Output{
+					Contents: []types.Object{
+						{Key: aws.String("cache/a.tar.gz"), LastModified: &older},
+					},
+					IsTruncated: aws.Bool(true),
+				}, nil)
+
+				return &S3{client: mockS3Client, Bucket: "test-bucket"}, "cache/", func() {}
+			},
+			wantErr: ErrListPagination,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc, prefix, teardown := tt.setup(t)
+			defer teardown()
+
+			got, err := svc.LatestObject(t.Context(), prefix)
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }

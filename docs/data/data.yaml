@@ -130,6 +130,19 @@ properties:
     defaultValue: "us-east-1"
     required: false
 
+  - name: restore_keys
+    description: |
+      Ordered list of key prefixes used by the archive `download` action when the
+      exact `target` object does not exist. Each entry is passed as the `Prefix`
+      of a `ListObjectsV2` call and the most recently modified object under that
+      prefix is restored. Prefixes are tried in order and the first one that
+      yields an object wins. This lets a cache keyed on a lockfile hash fall back
+      to the previous snapshot instead of starting cold. Only used by `download`;
+      `upload` still writes a single concrete `target` key. Requires the
+      `s3:ListBucket` permission on the configured prefixes.
+    type: list
+    required: false
+
   - name: secret_key
     description: |
       S3 secret key.
