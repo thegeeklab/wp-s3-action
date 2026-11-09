@@ -1645,6 +1645,95 @@ func TestS3_LatestObject(t *testing.T) {
 	}
 }
 
+func TestS3_Exists(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) (*S3, func())
+		want    bool
+		wantErr error
+	}{
+		{
+			name: "object exists",
+			setup: func(t *testing.T) (*S3, func()) {
+				t.Helper()
+
+				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.On("HeadObject", mock.Anything, mock.Anything).
+					Return(&s3.HeadObjectOutput{}, nil)
+
+				return &S3{client: mockS3Client, Bucket: "test-bucket"}, func() {
+					mockS3Client.AssertExpectations(t)
+				}
+			},
+			want: true,
+		},
+		{
+			name: "not found returns false",
+			setup: func(t *testing.T) (*S3, func()) {
+				t.Helper()
+
+				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.On("HeadObject", mock.Anything, mock.Anything).
+					Return(&s3.HeadObjectOutput{}, &types.NotFound{})
+
+				return &S3{client: mockS3Client, Bucket: "test-bucket"}, func() {
+					mockS3Client.AssertExpectations(t)
+				}
+			},
+			want: false,
+		},
+		{
+			name: "no such key returns false",
+			setup: func(t *testing.T) (*S3, func()) {
+				t.Helper()
+
+				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.On("HeadObject", mock.Anything, mock.Anything).
+					Return(&s3.HeadObjectOutput{}, &types.NoSuchKey{})
+
+				return &S3{client: mockS3Client, Bucket: "test-bucket"}, func() {
+					mockS3Client.AssertExpectations(t)
+				}
+			},
+			want: false,
+		},
+		{
+			name: "head error propagates",
+			setup: func(t *testing.T) (*S3, func()) {
+				t.Helper()
+
+				mockS3Client := mocks.NewMockS3APIClient(t)
+				mockS3Client.On("HeadObject", mock.Anything, mock.Anything).
+					Return(&s3.HeadObjectOutput{}, ErrHeadObject)
+
+				return &S3{client: mockS3Client, Bucket: "test-bucket"}, func() {}
+			},
+			wantErr: ErrHeadObject,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc, teardown := tt.setup(t)
+			defer teardown()
+
+			got, err := svc.Exists(t.Context(), "cache/archive.tar.gz")
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func TestS3_DownloadStream(t *testing.T) {
 	t.Parallel()
 

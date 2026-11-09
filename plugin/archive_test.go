@@ -547,6 +547,109 @@ func TestHandleArchiveDownloadRestoreKeys(t *testing.T) {
 	}
 }
 
+func TestHandleArchiveUploadSkipExisting(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) (*Plugin, *aws.Client, plugin_base.Network, func())
+		wantErr error
+	}{
+		{
+			name: "skips upload when object already exists",
+			setup: func(t *testing.T) (*Plugin, *aws.Client, plugin_base.Network, func()) {
+				t.Helper()
+
+				source := t.TempDir()
+				require.NoError(t, os.WriteFile(filepath.Join(source, "a.txt"), []byte("hello"), 0o600))
+
+				client, mockS3, _ := newMockClient(t)
+				mockS3.On("HeadObject", mock.Anything, mock.Anything).
+					Return(&s3.HeadObjectOutput{}, nil).Once()
+				mockS3.AssertNotCalled(t, "PutObject", mock.Anything, mock.Anything)
+
+				p, network := newTestPlugin(t.Context(), &Settings{
+					Bucket:  "bucket",
+					Source:  source,
+					Target:  "cache/archive.tar.gz",
+					Archive: Archive{Enabled: true, Compression: string(archive.CompressionGzip), SkipExisting: true},
+				})
+
+				return p, client, network, func() {
+					mockS3.AssertExpectations(t)
+				}
+			},
+		},
+		{
+			name: "uploads when object does not exist",
+			setup: func(t *testing.T) (*Plugin, *aws.Client, plugin_base.Network, func()) {
+				t.Helper()
+
+				source := t.TempDir()
+				require.NoError(t, os.WriteFile(filepath.Join(source, "a.txt"), []byte("hello"), 0o600))
+
+				client, mockS3, _ := newMockClient(t)
+				mockS3.On("HeadObject", mock.Anything, mock.Anything).
+					Return(&s3.HeadObjectOutput{}, &types.NotFound{}).Once()
+				mockS3.On("PutObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+					Return(&s3.PutObjectOutput{}, nil).Once()
+
+				p, network := newTestPlugin(t.Context(), &Settings{
+					Bucket:  "bucket",
+					Source:  source,
+					Target:  "cache/archive.tar.gz",
+					Archive: Archive{Enabled: true, Compression: string(archive.CompressionGzip), SkipExisting: true},
+				})
+
+				return p, client, network, func() {
+					mockS3.AssertExpectations(t)
+				}
+			},
+		},
+		{
+			name: "propagates existence check error",
+			setup: func(t *testing.T) (*Plugin, *aws.Client, plugin_base.Network, func()) {
+				t.Helper()
+
+				source := t.TempDir()
+				require.NoError(t, os.WriteFile(filepath.Join(source, "a.txt"), []byte("hello"), 0o600))
+
+				client, mockS3, _ := newMockClient(t)
+				mockS3.On("HeadObject", mock.Anything, mock.Anything).
+					Return(&s3.HeadObjectOutput{}, errMockGet).Once()
+
+				p, network := newTestPlugin(t.Context(), &Settings{
+					Bucket:  "bucket",
+					Source:  source,
+					Target:  "cache/archive.tar.gz",
+					Archive: Archive{Enabled: true, Compression: string(archive.CompressionGzip), SkipExisting: true},
+				})
+
+				return p, client, network, func() {}
+			},
+			wantErr: errMockGet,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			p, client, network, teardown := tt.setup(t)
+			defer teardown()
+
+			err := p.handleArchiveUpload(network.Context, *network.Client, plugin_base.Metadata{}, client.S3)
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+
+				return
+			}
+
+			assert.NoError(t, err)
+		})
+	}
+}
+
 func TestArchiveContentType(t *testing.T) {
 	t.Parallel()
 

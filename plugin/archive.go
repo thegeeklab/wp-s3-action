@@ -50,6 +50,20 @@ func (p *Plugin) handleArchiveUpload(
 		return nil
 	}
 
+	if p.Settings.Archive.SkipExisting {
+		exists, err := s3.Exists(ctx, target)
+		if err != nil {
+			return fmt.Errorf("check archive object existence: %w", err)
+		}
+
+		if exists {
+			log.Info().Msgf("archive object 's3://%s/%s' already exists, skipping upload",
+				p.Settings.Bucket, target)
+
+			return nil
+		}
+	}
+
 	pr, pw := io.Pipe()
 
 	go func() {
@@ -61,9 +75,10 @@ func (p *Plugin) handleArchiveUpload(
 	}()
 
 	if err := s3.UploadStream(ctx, aws.S3UploadStreamOptions{
-		RemoteObjectKey: target,
-		Body:            pr,
-		ContentType:     archiveContentType(compression),
+		RemoteObjectKey:    target,
+		Body:               pr,
+		ContentType:        archiveContentType(compression),
+		SkipExistenceCheck: p.Settings.Archive.SkipExisting,
 	}); err != nil {
 		_ = pr.CloseWithError(fmt.Errorf("upload archive: %w", err))
 

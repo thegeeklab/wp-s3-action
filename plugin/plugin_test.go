@@ -273,6 +273,37 @@ func TestRestoreKeysFlag(t *testing.T) {
 	}
 }
 
+func TestArchiveSkipExistingFlag(t *testing.T) {
+	tests := []struct {
+		name string
+		envs map[string]string
+		want bool
+	}{
+		{
+			name: "disabled by default",
+			envs: map[string]string{},
+			want: false,
+		},
+		{
+			name: "enabled via environment",
+			envs: map[string]string{"PLUGIN_ARCHIVE_SKIP_EXISTING": "true"},
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for key, value := range tt.envs {
+				t.Setenv(key, value)
+			}
+
+			got, _ := setupPluginTest(t)
+
+			assert.Equal(t, tt.want, got.Settings.Archive.SkipExisting)
+		})
+	}
+}
+
 func TestChecksumCalculationFlag(t *testing.T) {
 	tests := []struct {
 		name    string

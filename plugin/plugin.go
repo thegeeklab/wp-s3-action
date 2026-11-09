@@ -53,8 +53,9 @@ type Upload struct {
 }
 
 type Archive struct {
-	Enabled     bool
-	Compression string
+	Enabled      bool
+	Compression  string
+	SkipExisting bool
 }
 
 type CloudFront struct {
@@ -239,6 +240,19 @@ func Flags(settings *Settings, category string) []cli.Flag {
 				return compression.Set(s)
 			},
 			Category: category,
+		},
+		// Skip the archive `upload` when an object already exists at the `target`
+		// key, reporting success instead of overwriting it. Intended for caches
+		// keyed on a content hash, where the key describes an immutable snapshot
+		// that only needs to be written once. Requires the `s3:ListBucket` or
+		// `s3:GetObject`/`s3:HeadObject` permission to check existence. Only
+		// affects the archive `upload` action.
+		&cli.BoolFlag{
+			Name:        "archive.skip-existing",
+			Usage:       "skip archive upload when the target object already exists",
+			Sources:     cli.EnvVars("PLUGIN_ARCHIVE_SKIP_EXISTING"),
+			Destination: &settings.Archive.SkipExisting,
+			Category:    category,
 		},
 		// Ordered list of key prefixes used by the archive `download` action when the
 		// exact `target` object does not exist. Each entry is passed as the `Prefix`

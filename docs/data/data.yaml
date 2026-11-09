@@ -46,6 +46,18 @@ properties:
     defaultValue: "gzip"
     required: false
 
+  - name: archive_skip_existing
+    description: |
+      Skip the archive `upload` when an object already exists at the `target`
+      key, reporting success instead of overwriting it. Intended for caches
+      keyed on a content hash, where the key describes an immutable snapshot
+      that only needs to be written once. Requires the `s3:ListBucket` or
+      `s3:GetObject`/`s3:HeadObject` permission to check existence. Only
+      affects the archive `upload` action.
+    type: bool
+    defaultValue: false
+    required: false
+
   - name: bucket
     description: |
       Name of the bucket.

@@ -192,6 +192,26 @@ steps:
 
 `restore_keys` only affects the `download` action; `upload` always writes the single concrete `target` key. Prefix matching requires the `s3:ListBucket` permission on the configured prefixes, so a put/get-only credential that does not set `restore_keys` keeps working unchanged.
 
+A content-hashed key describes an immutable snapshot, so re-uploading it on every pipeline only costs bandwidth. Set `archive_skip_existing: true` to make the `upload` action a no-op when an object already exists at `target`, reporting success instead of overwriting:
+
+```YAML
+steps:
+  - name: save-cache
+    image: quay.io/thegeeklab/wp-s3-action
+    settings:
+      action:
+        - upload
+      archive: true
+      archive_skip_existing: true
+      access_key: randomstring
+      secret_key: random-secret
+      bucket: my-cache-bucket
+      source: .cache/uv
+      target: type-check/{{ sha256file "uv.lock" }}.tar.gz
+```
+
+`archive_skip_existing` only affects the archive `upload` action and requires the `s3:HeadObject` (or `s3:GetObject`/`s3:ListBucket`) permission to check whether the object exists.
+
 The default compression is `gzip`. Set `archive_compression: none` to store an uncompressed tar instead. The archive is streamed directly between the local filesystem and S3.
 
 #### Sync to a self-hosted S3 server
