@@ -20,6 +20,7 @@ type S3Runner interface {
 	Delete(ctx context.Context, opt aws.S3DeleteOptions) error
 	List(ctx context.Context, opt aws.S3ListOptions, fn func(string) error) error
 	LatestObject(ctx context.Context, prefix string) (string, error)
+	Exists(ctx context.Context, key string) (bool, error)
 }
 
 // CloudfrontRunner is the subset of *aws.Cloudfront used by the plugin.

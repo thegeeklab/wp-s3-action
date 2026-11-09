@@ -101,9 +101,10 @@ type S3ListOptions struct {
 
 // S3UploadStreamOptions configures a streaming upload from a reader.
 type S3UploadStreamOptions struct {
-	RemoteObjectKey string
-	Body            io.Reader
-	ContentType     string
+	RemoteObjectKey    string
+	Body               io.Reader
+	ContentType        string
+	SkipExistenceCheck bool
 }
 
 // S3DownloadStreamOptions configures a streaming download to a writer.
@@ -602,6 +603,24 @@ func (u *S3) Download(ctx context.Context, opt S3DownloadOptions) error {
 	return nil
 }
 
+// Exists reports whether an object exists at the given key. A missing object
+// is not an error and yields false.
+func (u *S3) Exists(ctx context.Context, key string) (bool, error) {
+	_, err := u.client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(u.Bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		if isNotFound(err) {
+			return false, nil
+		}
+
+		return false, err
+	}
+
+	return true, nil
+}
+
 // UploadStream uploads a single object from a reader. Unlike Upload, it
 // performs no content comparison: the body is produced at runtime (e.g. an
 // archive/cache tarball) and changes on every invocation. It uploads through
@@ -621,19 +640,18 @@ func (u *S3) UploadStream(ctx context.Context, opt S3UploadStreamOptions) error 
 		return nil
 	}
 
-	if _, err := u.client.HeadObject(ctx, &s3.HeadObjectInput{
-		Bucket: aws.String(u.Bucket),
-		Key:    aws.String(opt.RemoteObjectKey),
-	}); err != nil {
-		if isNotFound(err) {
-			log.Debug().Msgf("object '%s' not found, uploading new object", opt.RemoteObjectKey)
-		} else {
+	if !opt.SkipExistenceCheck {
+		exists, err := u.Exists(ctx, opt.RemoteObjectKey)
+		switch {
+		case err != nil:
 			log.Warn().
 				Err(err).
 				Msgf("could not check whether object '%s' exists, proceeding with upload that may overwrite", opt.RemoteObjectKey)
+		case exists:
+			log.Warn().Msgf("object '%s' already exists and will be overwritten", opt.RemoteObjectKey)
+		default:
+			log.Debug().Msgf("object '%s' not found, uploading new object", opt.RemoteObjectKey)
 		}
-	} else {
-		log.Warn().Msgf("object '%s' already exists and will be overwritten", opt.RemoteObjectKey)
 	}
 
 	_, err := transfermanager.New(u.client).UploadObject(ctx, &transfermanager.UploadObjectInput{
