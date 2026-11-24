@@ -7,7 +7,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.33.21
 	github.com/aws/aws-sdk-go-v2/credentials v1.21.3
 	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.5.11
-	github.com/aws/aws-sdk-go-v2/service/cloudfront v1.77.0
+	github.com/aws/aws-sdk-go-v2/service/cloudfront v1.78.0
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.116.0
 	github.com/rs/zerolog v1.35.1
 	github.com/stretchr/testify v1.12.1
